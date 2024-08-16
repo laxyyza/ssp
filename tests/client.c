@@ -7,7 +7,7 @@
 i32 
 main(void)
 {
-    const char* ipaddr = "";
+    const char* ipaddr = "0.0.0.0";
     const char* msg1 = "SSP - Simple Segmented Protocol";
     const char* msg2 = "Testing Some Stuff";
     u16 port = 8080;
