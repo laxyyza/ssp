@@ -1,7 +1,10 @@
+#include "ssp.h"
+#include "ssp_struct.h"
 #include "ssp_tcp.h"
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -23,6 +26,7 @@ typedef struct
     ght_t clients;
     struct epoll_event events[MAX_EVENTS];
     bool running;
+    ssp_state_t ssp_recv_state;
 } server_t;
 
 server_t server = {0};
@@ -41,6 +45,14 @@ server_add_fd(i32 fd)
     return ret;
 }
 
+static void
+segmap_zero(const ssp_segment_t* segment, _SSP_UNUSED void* data)
+{
+    char* str = strndup((const char*)segment->data, segment->size);
+    printf("\n\n>> segmap_zero: '%s'\n\n\n", str);
+    free(str);
+}
+
 static i32
 server_init(void)
 {
@@ -57,6 +69,10 @@ server_init(void)
     }
     if (server_add_fd(server.tcp_sock.sockfd) == -1)
         return -1;
+
+    ssp_state_init(&server.ssp_recv_state);
+    ssp_segmap(&server.ssp_recv_state, 0, segmap_zero);
+    ssp_segmap(&server.ssp_recv_state, 1, segmap_zero);
 
     server.running = true;
 
@@ -119,7 +135,7 @@ read_client(client_t* client)
         return;
     }
 
-    ssp_parse_buf(buf, bytes_read);
+    ssp_parse_buf(&server.ssp_recv_state, buf, bytes_read);
     free(buf);
 }
 

@@ -102,7 +102,7 @@ main(void)
 
     client_init();
 
-    ssp_segbuff_add(&client.segbuf, 0xDDDD, len1, msg1);
+    ssp_segbuff_add(&client.segbuf, 0x0, len1, msg1);
     ssp_segbuff_add(&client.segbuf, 0xFFFF, len2, msg2);
     ssp_segbuff_add(&client.segbuf, 0xDDDD, len1, msg1);
 

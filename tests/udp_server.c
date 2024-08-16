@@ -7,6 +7,7 @@
 #include <netdb.h>
 #include <stdio.h>
 #include <poll.h>
+#include <string.h>
 
 #define PORT 8080
 
@@ -15,9 +16,26 @@ typedef struct
     i32 sockfd;
     struct sockaddr_in addr;
     socklen_t addr_len;
+    ssp_state_t ssp_recv_state;
 } udp_server_t;
 
 udp_server_t server;
+
+static void
+segmap_zero(const ssp_segment_t* segment, _SSP_UNUSED void* data)
+{
+    char* str = strndup((const char*)segment->data, segment->size);
+    printf("Segmap ZERO: '%s'\n", str);
+    free(str);
+}
+
+static void
+segmap_ffff(const ssp_segment_t* segment, _SSP_UNUSED void* data)
+{
+    char* str = strndup((const char*)segment->data, segment->size);
+    printf("Segmap FFFF: '%s'\n", str);
+    free(str);
+}
 
 static i32 
 udp_server_init(void)
@@ -46,6 +64,10 @@ udp_server_init(void)
         return -1;
     }
 
+    ssp_state_init(&server.ssp_recv_state);
+    ssp_segmap(&server.ssp_recv_state, 0, segmap_zero);
+    ssp_segmap(&server.ssp_recv_state, 0xFFFF, segmap_ffff);
+
     return 0;
 }
 
@@ -71,7 +93,7 @@ read_socket(void)
 
     printf("\nRecv %lu bytes from %s...\n", bytes_read, ipaddr);
 
-    ssp_parse_buf(buf, bytes_read);
+    ssp_parse_buf(&server.ssp_recv_state, buf, bytes_read);
     free(buf);
 }
 

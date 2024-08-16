@@ -26,7 +26,7 @@ main(void)
 
     // Add msg type 6969 & CCCC
     ssp_segbuff_add(&segbuf, 0x6969, len1, msg1);
-    ssp_segbuff_add(&segbuf, 0xCCCC, len2, msg2);
+    ssp_segbuff_add(&segbuf, 0x0, len2, msg2);
 
     /**
      * Serialize packet from segbuf, send it, and free packet

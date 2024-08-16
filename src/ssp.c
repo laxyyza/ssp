@@ -1,10 +1,30 @@
 #include "ssp.h"
+#include "ght.h"
 #include "ssp_struct.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
+
+void 
+ssp_state_init(ssp_state_t* state)
+{
+    ssp_segbuff_init(&state->segbuf, 10);
+    ght_init(&state->segment_map, 10, NULL);
+}
+
+void 
+ssp_segmap(ssp_state_t* state, u16 segtype, ssp_segmap_callback_t callback)
+{
+    ght_insert(&state->segment_map, segtype, callback);
+}
+
+ssp_segmap_callback_t 
+ssp_get_segmap(ssp_state_t* state, u16 segtype)
+{
+    return ght_get(&state->segment_map, segtype);
+}
 
 u32 
 ssp_pack_size(u32 payload_size, u8 flags)
@@ -221,28 +241,39 @@ ssp_segbuff_clear(ssp_segbuff_t* segbuf)
 }
 
 static void 
-ssp_parse_payload(const ssp_packet_t* packet)
+ssp_parse_payload(ssp_state_t* state, const ssp_packet_t* packet)
 {
     u32 offset = 0;
     ssp_segment_t* segment;
+    ssp_segmap_callback_t segmap_callback;
 
     for (u32 i = 0; i < packet->header.segments; i++)
     {
         segment = (ssp_segment_t*)(packet->payload + offset);
-        char* data = calloc(segment->size + 1, 1);
-        strncpy(data, (const char*)segment->data, segment->size);
 
-        printf("> segment%u\n", i);
-        printf("\tType: %X\n", segment->type);
-        printf("\tSize: %u\n", segment->size);
-        printf("\tData: '%s'\n", data);
+        if ((segmap_callback = ssp_get_segmap(state, segment->type)))
+        {
+            segmap_callback(segment, state->user_data);
+        }
+        else
+        {
+            printf("ssp_parse_payload: No segmap for type: %X.\n", 
+                   segment->type);
+        }
+
+        // char* data = calloc(segment->size + 1, 1);
+        // strncpy(data, (const char*)segment->data, segment->size);
+        // printf("> segment%u\n", i);
+        // printf("\tType: %X\n", segment->type);
+        // printf("\tSize: %u\n", segment->size);
+        // printf("\tData: '%s'\n", data);
 
         offset += segment->size + sizeof(ssp_segment_t);
     }
 }
 
 void 
-ssp_parse_buf(const void* buf, u64 buf_size)
+ssp_parse_buf(ssp_state_t* state, const void* buf, u64 buf_size)
 {
     const ssp_packet_t* packet = buf;
     ssp_footer_t* footer = NULL;
@@ -291,11 +322,11 @@ ssp_parse_buf(const void* buf, u64 buf_size)
             printf("Ok!\n");
     }
 
-    ssp_parse_payload(packet);
+    ssp_parse_payload(state, packet);
 
     if (another_packet)
     {
         printf("\nAnother packet!\n\n");
-        ssp_parse_buf(buf + another_packet_offset, buf_size - another_packet_offset);
+        ssp_parse_buf(state, buf + another_packet_offset, buf_size - another_packet_offset);
     }
 }

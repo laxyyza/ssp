@@ -13,7 +13,14 @@ ssp_src = files(
 )
 ssp_include = include_directories('include/')
 
-
-libssp = library('ssp', ssp_src, include_directories: ssp_include)
+libssp = library('ssp', ssp_src, 
+    include_directories: [
+        ssp_include,
+        ght_include
+    ],
+    link_with: [
+        libght
+    ]
+)
 
 subdir('tests/')
