@@ -1,14 +1,22 @@
 tcp_client_src = files('tcp_client.c')
 tcp_server_src = files('tcp_server.c')
 udp_client_src = files('udp_client.c')
+udp_server_src = files('udp_server.c')
 
-executable('tcp_client', tcp_client_src, include_directories: ssp_include,
+
+executable('udp_client', udp_client_src, include_directories: ssp_include,
     link_with: [
         libssp
     ]
 )
 
-executable('udp_client', udp_client_src, include_directories: ssp_include,
+executable('udp_server', udp_server_src, include_directories: ssp_include,
+    link_with: [
+        libssp
+    ]
+)
+
+executable('tcp_client', tcp_client_src, include_directories: ssp_include,
     link_with: [
         libssp
     ]
@@ -24,3 +32,4 @@ executable('tcp_server', tcp_server_src,
         libght
     ]
 )
+
