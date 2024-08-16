@@ -1,6 +1,8 @@
+#include "ssp.h"
 #include "ssp_tcp.h"
 
-int main(void)
+i32 
+main(void)
 {
     const char* ipaddr = "127.0.0.1";
     const char* msg = "SSP - Simple Segmented Protocol";

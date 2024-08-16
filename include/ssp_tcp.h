@@ -26,7 +26,7 @@ typedef struct
     u16 port;
 } ssp_addr_t;
 
-typedef struct 
+typedef struct ssp_tcp_sock
 {
     i32 sockfd;
     ssp_addr_t addr;

@@ -87,9 +87,17 @@ ssp_tcp_send_msg(ssp_tcp_sock_t* sock, const char* msg)
     segmsg = ssp_new_segment(0, msg, size);
     packet = ssp_new_packet_from_payload(segmsg, ssp_seg_size(segmsg), 1);
     footer = ssp_get_footer(packet);
-    footer->checksum = 0x694200; // TODO: hash function
+    if (footer)
+        footer->checksum = ssp_checksum32(packet, ssp_pack_size(packet->header.size, 0));
 
-    if ((ret = send(sock->sockfd, packet, ssp_pack_size(packet->header.size), 0)) == -1)
+    u64 packet_size = ssp_pack_size(packet->header.size, packet->header.footer);
+
+    printf("Sending %lu bytes: [header: %lu, payload: %u, footer: %lu [checksum: %X]]\n",
+           packet_size, sizeof(ssp_header_t), packet->header.size, 
+           (sizeof(ssp_footer_t) * packet->header.footer),
+           footer->checksum);
+
+    if ((ret = send(sock->sockfd, packet, packet_size, 0)) == -1)
         perror("send");
 
     free(segmsg);

@@ -21,43 +21,46 @@
  *  [ [header] [payload: {segment0, segment1, ...}] [footer] ]
  *
  *  [ 
- *      [ header ] 
- *          magic
- *          payload_size
- *          u8 segments
+ *      [ header ] 8 + 4 + 2 = 14 bytes
+ *          u64 magic
+ *          u32 payload_size
+ *          1-bit footer
+ *          15-bit segments
  *
- *      [ payload: {
- *          segment0, 
- *              type
- *              size
- *              data
+ *      [ payload: {  6-UINT32_MAX bytes
+ *          segment0, 6+ bytes
+ *              u16 type
+ *              u32 size
+ *              u8 data[]
  *          segment1, 
- *              type
- *              size
- *              data
+ *              u16 type
+ *              u32 size
+ *              u8 data[]
  *          ...
  *      }] 
  *
- *      [ footer ] 
- *          checksum
+ *      [ footer ] 4 bytes
+ *          u32 checksum
  *  ]
  */
 
 #define SSP_MAGIC 0xDEAD00BEEF00ABCD
+#define _SSP_PACKED __attribute__((packed))
 
 typedef struct ssp_header
 {
-    u64 magic;      // Magic u64
-    u16 size;       // Payload Size
-    u16 segments;   // Segment count
-} ssp_header_t;
+    u64 magic;          // Magic u64
+    u32 size;           // Payload Size
+    u16 footer:1;       // Footer bit
+    u16 segments:15;    // Segment count
+} _SSP_PACKED ssp_header_t;
 
 typedef struct ssp_segment
 {
     u16 type;
-    u16 size;
+    u32 size;
     u8  data[];
-} ssp_segment_t;
+} _SSP_PACKED ssp_segment_t;
 
 typedef struct ssp_footer
 {
@@ -69,6 +72,5 @@ typedef struct ssp_packet
     ssp_header_t header;
     u8           payload[];
 } ssp_packet_t;
-
 
 #endif // _SSP_STRUCT_H_
