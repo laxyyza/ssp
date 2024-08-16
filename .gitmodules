@@ -1,0 +1,3 @@
+[submodule "lib/ght"]
+	path = lib/ght
+	url = git@github.com:laxyy69/ght.git
