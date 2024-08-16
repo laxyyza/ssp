@@ -133,6 +133,7 @@ static void
 ssp_serialize(ssp_packet_t* packet, ssp_segbuff_t* segbuf)
 {
     u32 offset = 0;
+    packet->header.segments = segbuf->count;
 
     for (u32 i = 0; i < segbuf->count; i++)
     {

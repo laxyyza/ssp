@@ -118,8 +118,9 @@ ssp_tcp_send(ssp_tcp_sock_t* sock, const ssp_packet_t* packet)
     u32 packet_size = ssp_pack_size(payload_size, add_footer);
     ssp_footer_t* footer = ssp_get_footer(packet);
 
-    printf("Sending %u bytes: [header: %lu, payload: %u, footer: %lu ",
-           packet_size, sizeof(ssp_header_t), packet->header.size, 
+    printf("Sending %u bytes (%u segments): [header: %lu, payload: %u, footer: %lu ",
+           packet_size, packet->header.segments, 
+           sizeof(ssp_header_t), packet->header.size, 
            (sizeof(ssp_footer_t) * packet->header.footer));
     if (footer)
         printf("[checksum: %X]", footer->checksum);
