@@ -70,43 +70,6 @@ ssp_tcp_sock_close(ssp_tcp_sock_t* sock)
 }
 
 i32 
-ssp_tcp_send_msg(ssp_tcp_sock_t* sock, const char* msg)
-{
-    if (sock->connected == false)
-    {
-        printf("Cant send message if not connected.\n");
-        return -1;
-    }
-
-    i32 ret = 0;
-    u32 size = strlen(msg);
-    ssp_packet_t* packet;
-    ssp_segment_t* segmsg;
-    ssp_footer_t* footer;
-
-    segmsg = ssp_new_segment(0, msg, size);
-    packet = ssp_new_packet_from_payload(segmsg, ssp_seg_size(segmsg), 1);
-    footer = ssp_get_footer(packet);
-    if (footer)
-        footer->checksum = ssp_checksum32(packet, ssp_pack_size(packet->header.size, 0));
-
-    u64 packet_size = ssp_pack_size(packet->header.size, packet->header.footer);
-
-    printf("Sending %lu bytes: [header: %lu, payload: %u, footer: %lu [checksum: %X]]\n",
-           packet_size, sizeof(ssp_header_t), packet->header.size, 
-           (sizeof(ssp_footer_t) * packet->header.footer),
-           footer->checksum);
-
-    if ((ret = send(sock->sockfd, packet, packet_size, 0)) == -1)
-        perror("send");
-
-    free(segmsg);
-    free(packet);
-
-    return ret;
-}
-
-i32 
 ssp_tcp_send(ssp_tcp_sock_t* sock, const ssp_packet_t* packet)
 {
     if (packet == NULL)
@@ -114,14 +77,14 @@ ssp_tcp_send(ssp_tcp_sock_t* sock, const ssp_packet_t* packet)
 
     i32 ret;
     u32 payload_size = packet->header.size;
-    u8  add_footer = packet->header.footer;
-    u32 packet_size = ssp_pack_size(payload_size, add_footer);
+    u8  add_footer = (packet->header.flags & SSP_FOOTER_BIT) != 0;
+    u32 packet_size = ssp_pack_size(payload_size, packet->header.flags);
     ssp_footer_t* footer = ssp_get_footer(packet);
 
     printf("Sending %u bytes (%u segments): [header: %lu, payload: %u, footer: %lu ",
            packet_size, packet->header.segments, 
            sizeof(ssp_header_t), packet->header.size, 
-           (sizeof(ssp_footer_t) * packet->header.footer));
+           (sizeof(ssp_footer_t) * add_footer));
     if (footer)
         printf("[checksum: %X]", footer->checksum);
     printf("]\n");

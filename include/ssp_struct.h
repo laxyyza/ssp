@@ -44,15 +44,29 @@
  *  ]
  */
 
-#define SSP_MAGIC 0xDEAD00BEEF00ABCD
+#define SSP_MAGIC 0xDEADBEEF;
 #define _SSP_PACKED __attribute__((packed))
 
+#define SSP_FOOTER_BIT 0x80
+
+/**
+ * Header structure:
+ *
+ * [32-bit magic][32-bit payload size][8-bit flags][8-bit segment count]
+ *
+ *  flags bits:
+ *     [0 1 2 3 4 5 6 7]
+ *      F R R R R R R R
+ *      
+ *      F - Footer
+ *      R - Reserve
+ */
 typedef struct ssp_header
 {
-    u64 magic;          // Magic u64
-    u32 size;           // Payload Size
-    u16 footer:1;       // Footer bit
-    u16 segments:15;    // Segment count
+    u32 magic;      // Magic u32
+    u32 size;       // Payload Size
+    u8 flags;       // flags
+    u8 segments;    // Segment count
 } _SSP_PACKED ssp_header_t;
 
 typedef struct ssp_segment

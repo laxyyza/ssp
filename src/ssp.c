@@ -6,9 +6,11 @@
 #include <stdio.h>
 
 u32 
-ssp_pack_size(u32 payload_size, u8 footer)
+ssp_pack_size(u32 payload_size, u8 flags)
 {
-    return sizeof(ssp_packet_t) + payload_size + (sizeof(ssp_footer_t) * footer);
+    return sizeof(ssp_packet_t) + 
+            payload_size + 
+            (sizeof(ssp_footer_t) * ((flags & SSP_FOOTER_BIT) >> 7));
 }
 
 ssp_packet_t*
@@ -26,26 +28,26 @@ ssp_packet_t*
 ssp_new_packet_from_payload(const void* payload, u16 size, u8 segments)
 {
     ssp_packet_t* packet;
-    u8 footer = 1;
+    u8 flags = SSP_FOOTER_BIT;
 
-    packet = malloc(ssp_pack_size(size, footer));
+    packet = malloc(ssp_pack_size(size, flags));
     packet->header.magic = SSP_MAGIC;
     packet->header.size = size;
     packet->header.segments = segments;
-    packet->header.footer = footer;
+    packet->header.flags = flags;
     memcpy(packet->payload, payload, size);
 
     return packet;
 }
 
 ssp_packet_t*
-ssp_new_packet(u32 size, u8 footer)
+ssp_new_packet(u32 size, u8 flags)
 {
     ssp_packet_t* packet;
 
-    packet = calloc(1, ssp_pack_size(size, footer));
+    packet = calloc(1, ssp_pack_size(size, flags));
     packet->header.magic = SSP_MAGIC;
-    packet->header.footer = footer;
+    packet->header.flags = flags;
     packet->header.size = size;
 
     return packet;
@@ -68,18 +70,18 @@ void
 ssp_empty_add_payload(ssp_packet_t** src_packet, const void* payload, u16 size, u8 segments)
 {
     ssp_packet_t* packet;
-    u8 footer = 1;
+    u8 flags = SSP_FOOTER_BIT;
     if (src_packet == NULL || *src_packet == NULL)
         return;
     packet = *src_packet;
     if (packet->header.size != 0)
         return;
-    *src_packet = realloc(packet, ssp_pack_size(size, footer));
+    *src_packet = realloc(packet, ssp_pack_size(size, flags));
     packet = *src_packet;
 
     packet->header.size = size;
     packet->header.segments = segments;
-    packet->header.footer = footer;
+    packet->header.flags = flags;
     memcpy(packet->payload, payload, size);
 }
 
@@ -94,7 +96,7 @@ ssp_get_footer(const ssp_packet_t* packet)
 {
     uint8_t* u8packet = (u8*)packet;
     ssp_footer_t* footer;
-    if (packet == NULL || packet->header.size == 0 || packet->header.footer == 0)
+    if (packet == NULL || packet->header.size == 0 || (packet->header.flags & SSP_FOOTER_BIT) == 0)
         return NULL;
     footer = (ssp_footer_t*)(u8packet + (sizeof(ssp_packet_t) + packet->header.size));
     return footer;
@@ -154,14 +156,14 @@ ssp_serialize_packet(ssp_segbuff_t* segbuf)
     ssp_packet_t* packet;
     ssp_footer_t* footer;
     u32 payload_size;
-    u8  add_footer = 1;
+    u8  flags = SSP_FOOTER_BIT;
 
     if (segbuf->count == 0)
         return NULL;
 
     payload_size = ssp_get_segbuf_total_size(segbuf) + 
                     (sizeof(ssp_segment_t) * segbuf->count);
-    packet = ssp_new_packet(payload_size, add_footer);
+    packet = ssp_new_packet(payload_size, flags);
 
     printf("Serializing... segbuf->count: %u\n", segbuf->count);
 

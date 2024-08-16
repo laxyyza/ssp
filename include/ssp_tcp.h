@@ -37,7 +37,6 @@ typedef struct ssp_tcp_sock
 i32 ssp_tcp_sock_create(ssp_tcp_sock_t* sock, enum ssp_sockdomain domain);
 i32 ssp_tcp_connect(ssp_tcp_sock_t* sock, const char* ipaddr, u16 port);
 void ssp_tcp_sock_close(ssp_tcp_sock_t* sock);
-i32 ssp_tcp_send_msg(ssp_tcp_sock_t* sock, const char* msg);
 i32 ssp_tcp_send(ssp_tcp_sock_t* sock, const ssp_packet_t* packet);
 
 #endif // _SSP_TCP_H_
