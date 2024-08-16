@@ -44,7 +44,7 @@
  *  ]
  */
 
-#define SSP_MAGIC 0xDEADBEEF;
+#define SSP_MAGIC 0xDEADBEEF
 #define _SSP_PACKED __attribute__((packed))
 
 #define SSP_FOOTER_BIT 0x80

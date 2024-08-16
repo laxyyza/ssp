@@ -37,4 +37,6 @@ void    ssp_segbuff_init(ssp_segbuff_t* segbuf, u32 init_size);
 void    ssp_segbuff_add(ssp_segbuff_t* segbuf, u16 type, u32 size, const void* data);
 void    ssp_segbuff_clear(ssp_segbuff_t* segbuf);
 
+void    ssp_parse_buf(const void* buf, u64 buf_size);
+
 #endif // _SSP_H_

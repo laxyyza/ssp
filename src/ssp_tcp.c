@@ -1,6 +1,7 @@
 #include "ssp_tcp.h"
 #include "ssp.h"
 #include "ssp_struct.h"
+#include <asm-generic/socket.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -61,6 +62,52 @@ ssp_tcp_connect(ssp_tcp_sock_t* sock, const char* ipaddr, u16 port)
     }
 
     return ret;
+}
+
+i32 
+ssp_tcp_server(ssp_tcp_sock_t* sock, enum ssp_sockdomain domain, u16 port)
+{
+    if (ssp_tcp_sock_create(sock, domain) == -1)
+        return -1;
+
+    switch (sock->addr.domain)
+    {
+        case SSP_IPv6:
+            // TODO
+            break;
+        case SSP_IPv4:
+        default:
+            sock->addr.sockaddr.in.sin_family = AF_INET;
+            sock->addr.sockaddr.in.sin_port = htons(port);
+            sock->addr.sockaddr.in.sin_addr.s_addr = INADDR_ANY;
+            sock->addr.addr_len = sizeof(struct sockaddr_in);
+            break;
+    }
+
+    int opt = 1;
+
+    if (setsockopt(sock->sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(int)) == -1)
+    {
+        perror("setsockopt");
+        goto err;
+    }
+
+    if (bind(sock->sockfd, (struct sockaddr*)&sock->addr.sockaddr.in, sock->addr.addr_len) == -1)
+    {
+        perror("bind");
+        goto err;
+    }
+
+    if (listen(sock->sockfd, 100) == -1)
+    {
+        perror("listen");
+        goto err;
+    }
+
+    return 0;
+err:
+    ssp_tcp_sock_close(sock);
+    return -1;
 }
 
 void 

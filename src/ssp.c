@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 u32 
 ssp_pack_size(u32 payload_size, u8 flags)
@@ -217,4 +218,84 @@ ssp_segbuff_clear(ssp_segbuff_t* segbuf)
 {
     segbuf->count = 0;
     ssp_segbuff_resize(segbuf, segbuf->min_size);
+}
+
+static void 
+ssp_parse_payload(const ssp_packet_t* packet)
+{
+    u32 offset = 0;
+    ssp_segment_t* segment;
+
+    for (u32 i = 0; i < packet->header.segments; i++)
+    {
+        segment = (ssp_segment_t*)(packet->payload + offset);
+        char* data = calloc(segment->size + 1, 1);
+        strncpy(data, (const char*)segment->data, segment->size);
+
+        printf("> segment%u\n", i);
+        printf("\tType: %X\n", segment->type);
+        printf("\tSize: %u\n", segment->size);
+        printf("\tData: '%s'\n", data);
+
+        offset += segment->size + sizeof(ssp_segment_t);
+    }
+}
+
+void 
+ssp_parse_buf(const void* buf, u64 buf_size)
+{
+    const ssp_packet_t* packet = buf;
+    ssp_footer_t* footer = NULL;
+    u32 our_checksum;
+    u64 packet_size;
+    bool another_packet = false;
+    u64 another_packet_offset = 0;
+
+    if (packet->header.magic != SSP_MAGIC)
+    {
+        printf("ssp_parse_buf: failed! %X != %X\n",
+               packet->header.magic, SSP_MAGIC);
+        return;
+    }
+
+    packet_size = ssp_pack_size(packet->header.size, packet->header.flags);
+    if (packet_size > buf_size)
+    {
+        printf(">>> Packet incomplete?\n");
+    }
+    else if (packet_size < buf_size)
+    {
+        another_packet = true;
+        another_packet_offset = packet_size;
+    }
+
+    printf("New packet:\n");
+    printf("\tFlags: %X\n", packet->header.flags);
+    if ((footer = ssp_get_footer(packet)))
+        printf("\t\tChecksum: %X\n", footer->checksum);
+    printf("\tPayload size: %u\n", packet->header.size);
+    printf("\tSegment count: %u\n", packet->header.segments);
+
+    if (footer) 
+    {
+        our_checksum = ssp_checksum32(packet, 
+                                      ssp_pack_size(packet->header.size, 0));
+        printf("> Comparing checksum, our: %X == %X ... ",
+               our_checksum, footer->checksum);
+        if (our_checksum != footer->checksum)
+        {
+            printf("FAILED!\n");
+            return;
+        }
+        else
+            printf("Ok!\n");
+    }
+
+    ssp_parse_payload(packet);
+
+    if (another_packet)
+    {
+        printf("\nAnother packet!\n\n");
+        ssp_parse_buf(buf + another_packet_offset, buf_size - another_packet_offset);
+    }
 }
