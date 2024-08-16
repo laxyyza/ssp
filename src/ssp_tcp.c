@@ -105,3 +105,28 @@ ssp_tcp_send_msg(ssp_tcp_sock_t* sock, const char* msg)
 
     return ret;
 }
+
+i32 
+ssp_tcp_send(ssp_tcp_sock_t* sock, const ssp_packet_t* packet)
+{
+    if (packet == NULL)
+        return -1;
+
+    i32 ret;
+    u32 payload_size = packet->header.size;
+    u8  add_footer = packet->header.footer;
+    u32 packet_size = ssp_pack_size(payload_size, add_footer);
+    ssp_footer_t* footer = ssp_get_footer(packet);
+
+    printf("Sending %u bytes: [header: %lu, payload: %u, footer: %lu ",
+           packet_size, sizeof(ssp_header_t), packet->header.size, 
+           (sizeof(ssp_footer_t) * packet->header.footer));
+    if (footer)
+        printf("[checksum: %X]", footer->checksum);
+    printf("]\n");
+
+    if ((ret = send(sock->sockfd, packet, packet_size, 0)) == -1)
+        perror("send");
+
+    return ret;
+}
