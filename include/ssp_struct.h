@@ -21,11 +21,11 @@
  *  [ [header] [payload: {segment0, segment1, ...}] [footer] ]
  *
  *  [ 
- *      [ header ] 8 + 4 + 2 = 14 bytes
- *          u64 magic
+ *      [ header ] 10 bytes
+ *          u32 magic
  *          u32 payload_size
- *          1-bit footer
- *          15-bit segments
+ *          u8  flags
+ *          u8  segments
  *
  *      [ payload: {  6-UINT32_MAX bytes
  *          segment0, 6+ bytes
@@ -39,7 +39,7 @@
  *          ...
  *      }] 
  *
- *      [ footer ] 4 bytes
+ *      [ footer (optional) ] 4 bytes
  *          u32 checksum
  *  ]
  */
