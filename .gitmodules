@@ -1,3 +1,3 @@
-[submodule "lib/ght"]
-	path = lib/ght
+[submodule "ssp/lib/ght"]
+	path = ssp/lib/ght
 	url = git@github.com:laxyy69/ght.git
