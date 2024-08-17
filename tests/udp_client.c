@@ -81,7 +81,7 @@ client_send(const ssp_packet_t* packet)
         return -1;
 
     i64 ret;
-    u64 size = ssp_pack_size(packet->header.size, packet->header.flags);
+    u64 size = ssp_packet_size(packet);
 
     print_sending_packet(packet, size);
 
