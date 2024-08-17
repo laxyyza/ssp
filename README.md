@@ -13,10 +13,10 @@ Here's a high-level overview of a packet:
 ```
 ### Header Details:
 ```
-[ [32-bit magic][32-bit payload size][8-bit flags][8-bit segment count] ]
+[ [32-bit magic][32-bit size][8-bit flags][8-bit segment count] ]
 ```
 - `magic`: A unique identifier for the packet.
-- `payload size`: The size of the payload in bytes.
+- `size`: The size of the payload in bytes.
 - `flags`: Options for the packet, represented by flag bits:
 ```
 [0 1 2 3 4 5 6 7]
