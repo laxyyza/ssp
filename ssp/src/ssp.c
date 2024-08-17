@@ -1,6 +1,7 @@
 #include "ssp.h"
 #include "ght.h"
 #include "ssp_struct.h"
+#include "sspint.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,39 +27,31 @@ ssp_get_segmap(ssp_state_t* state, u16 segtype)
     return ght_get(&state->segment_map, segtype);
 }
 
-u32 
-ssp_pack_size(u32 payload_size, u8 flags)
+u64 
+ssp_calc_psize(u32 payload_size, u8 flags)
 {
     return sizeof(ssp_packet_t) + 
             payload_size + 
             (sizeof(ssp_footer_t) * ((flags & SSP_FOOTER_BIT) >> 7));
 }
 
-ssp_packet_t*
-ssp_new_empty_packet(void)
+u64 
+ssp_packet_size(const ssp_packet_t* packet)
 {
-    ssp_packet_t* packet;
-
-    packet = calloc(1, ssp_pack_size(0, 0));
-    packet->header.magic = SSP_MAGIC;
-
-    return packet;
+    return ssp_calc_psize(packet->header.size,
+                          packet->header.flags);
 }
 
-ssp_packet_t*
-ssp_new_packet_from_payload(const void* payload, u16 size, u8 segments)
+u64 
+ssp_checksum_size(const ssp_packet_t* packet)
 {
-    ssp_packet_t* packet;
-    u8 flags = SSP_FOOTER_BIT;
+    return ssp_calc_psize(packet->header.size, 0);
+}
 
-    packet = malloc(ssp_pack_size(size, flags));
-    packet->header.magic = SSP_MAGIC;
-    packet->header.size = size;
-    packet->header.segments = segments;
-    packet->header.flags = flags;
-    memcpy(packet->payload, payload, size);
-
-    return packet;
+u64 
+ssp_seg_size(const ssp_segment_t* seg)
+{
+    return sizeof(ssp_segment_t) + seg->size;
 }
 
 ssp_packet_t*
@@ -66,50 +59,12 @@ ssp_new_packet(u32 size, u8 flags)
 {
     ssp_packet_t* packet;
 
-    packet = calloc(1, ssp_pack_size(size, flags));
+    packet = calloc(1, ssp_calc_psize(size, flags));
     packet->header.magic = SSP_MAGIC;
     packet->header.flags = flags;
     packet->header.size = size;
 
     return packet;
-}
-
-ssp_segment_t* 
-ssp_new_segment(u8 type, const void* data, u16 size)
-{
-    ssp_segment_t* seg;
-
-    seg = malloc(sizeof(ssp_segment_t) + size);
-    seg->type = type;
-    seg->size = size;
-    memcpy(seg->data, data, size);
-
-    return seg;
-}
-
-void 
-ssp_empty_add_payload(ssp_packet_t** src_packet, const void* payload, u16 size, u8 segments)
-{
-    ssp_packet_t* packet;
-    u8 flags = SSP_FOOTER_BIT;
-    if (src_packet == NULL || *src_packet == NULL)
-        return;
-    packet = *src_packet;
-    if (packet->header.size != 0)
-        return;
-    *src_packet = realloc(packet, ssp_pack_size(size, flags));
-    packet = *src_packet;
-
-    packet->header.size = size;
-    packet->header.segments = segments;
-    packet->header.flags = flags;
-    memcpy(packet->payload, payload, size);
-}
-
-u32 
-ssp_seg_size(const ssp_segment_t* seg)
-{
-    return sizeof(ssp_segment_t) + seg->size;
 }
 
 ssp_footer_t*  
@@ -186,12 +141,10 @@ ssp_serialize_packet(ssp_segbuff_t* segbuf)
                     (sizeof(ssp_segment_t) * segbuf->count);
     packet = ssp_new_packet(payload_size, flags);
 
-    printf("Serializing... segbuf->count: %u\n", segbuf->count);
-
     ssp_serialize(packet, segbuf);
 
     if ((footer = ssp_get_footer(packet)))
-        footer->checksum = ssp_checksum32(packet, ssp_pack_size(payload_size, 0));
+        footer->checksum = ssp_checksum32(packet, ssp_calc_psize(payload_size, 0));
 
     ssp_segbuff_clear(segbuf);
 
@@ -223,6 +176,9 @@ ssp_segbuff_resize(ssp_segbuff_t* segbuf, u32 new_size)
 void    
 ssp_segbuff_add(ssp_segbuff_t* segbuf, u16 type, u32 size, const void* data)
 {
+    if (data == NULL)
+        return;
+
     ssp_seglisten_t* seglisten = segbuf->segments + segbuf->count;
     seglisten->type = type;
     seglisten->size = size;
@@ -236,16 +192,21 @@ ssp_segbuff_add(ssp_segbuff_t* segbuf, u16 type, u32 size, const void* data)
 void 
 ssp_segbuff_clear(ssp_segbuff_t* segbuf)
 {
+    if (segbuf == NULL)
+        return;
+
     segbuf->count = 0;
     ssp_segbuff_resize(segbuf, segbuf->min_size);
 }
 
-static void 
+static i32
 ssp_parse_payload(ssp_state_t* state, const ssp_packet_t* packet)
 {
+    i32 ret = SSP_SUCCESS;
     u32 offset = 0;
     ssp_segment_t* segment;
     ssp_segmap_callback_t segmap_callback;
+    bool segmap_called = false;
 
     for (u32 i = 0; i < packet->header.segments; i++)
     {
@@ -254,79 +215,43 @@ ssp_parse_payload(ssp_state_t* state, const ssp_packet_t* packet)
         if ((segmap_callback = ssp_get_segmap(state, segment->type)))
         {
             segmap_callback(segment, state->user_data);
+            segmap_called = true;
         }
         else
-        {
-            printf("ssp_parse_payload: No segmap for type: %X.\n", 
-                   segment->type);
-        }
-
-        // char* data = calloc(segment->size + 1, 1);
-        // strncpy(data, (const char*)segment->data, segment->size);
-        // printf("> segment%u\n", i);
-        // printf("\tType: %X\n", segment->type);
-        // printf("\tSize: %u\n", segment->size);
-        // printf("\tData: '%s'\n", data);
+            ret = SSP_SEGMAP_NO_ASSIGN;
 
         offset += segment->size + sizeof(ssp_segment_t);
     }
+    return (segmap_called) ? ret : SSP_NOT_USED;
 }
 
-void 
+i32
 ssp_parse_buf(ssp_state_t* state, const void* buf, u64 buf_size)
 {
+    i32 ret;
     const ssp_packet_t* packet = buf;
     ssp_footer_t* footer = NULL;
     u32 our_checksum;
     u64 packet_size;
     bool another_packet = false;
-    u64 another_packet_offset = 0;
 
     if (packet->header.magic != SSP_MAGIC)
-    {
-        printf("ssp_parse_buf: failed! %X != %X\n",
-               packet->header.magic, SSP_MAGIC);
-        return;
-    }
+        return SSP_FAILED;
 
-    packet_size = ssp_pack_size(packet->header.size, packet->header.flags);
+    packet_size = ssp_packet_size(packet);
     if (packet_size > buf_size)
-    {
-        printf(">>> Packet incomplete?\n");
-    }
+        return SSP_INCOMPLETE;
     else if (packet_size < buf_size)
-    {
         another_packet = true;
-        another_packet_offset = packet_size;
-    }
 
-    printf("New packet:\n");
-    printf("\tFlags: %X\n", packet->header.flags);
     if ((footer = ssp_get_footer(packet)))
-        printf("\t\tChecksum: %X\n", footer->checksum);
-    printf("\tPayload size: %u\n", packet->header.size);
-    printf("\tSegment count: %u\n", packet->header.segments);
-
-    if (footer) 
     {
-        our_checksum = ssp_checksum32(packet, 
-                                      ssp_pack_size(packet->header.size, 0));
-        printf("> Comparing checksum, our: %X == %X ... ",
-               our_checksum, footer->checksum);
+        our_checksum = ssp_checksum32(packet, ssp_checksum_size(packet));
         if (our_checksum != footer->checksum)
-        {
-            printf("FAILED!\n");
-            return;
-        }
-        else
-            printf("Ok!\n");
+            return -1;
     }
 
-    ssp_parse_payload(state, packet);
+    ret = ssp_parse_payload(state, packet);
 
-    if (another_packet)
-    {
-        printf("\nAnother packet!\n\n");
-        ssp_parse_buf(state, buf + another_packet_offset, buf_size - another_packet_offset);
-    }
+    return (another_packet) ? SSP_MORE : ret;
 }

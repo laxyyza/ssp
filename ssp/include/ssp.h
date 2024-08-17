@@ -5,6 +5,12 @@
 #include <ght.h>
 
 #define _SSP_UNUSED __attribute__((unused))
+#define SSP_SUCCESS 0
+#define SSP_FAILED -1
+#define SSP_SEGMAP_NO_ASSIGN 1
+#define SSP_INCOMPLETE -2
+#define SSP_MORE 2
+#define SSP_NOT_USED -3
 
 typedef struct 
 {
@@ -44,24 +50,73 @@ typedef struct
 void ssp_state_init(ssp_state_t* state);
 void ssp_segmap(ssp_state_t* state, u16 segtype, ssp_segmap_callback_t callback);
 
-ssp_packet_t*  ssp_empty_packet(void);
-ssp_segment_t* ssp_new_segment(u8 type, const void* data, u16 size);
-ssp_packet_t*  ssp_new_packet_from_payload(const void* payload, u16 size, u8 segments);
-void           ssp_empty_add_payload(ssp_packet_t** packet, const void* payload, u16 size, u8 segments);
-ssp_packet_t*  ssp_new_packet(u32 payload_size, u8 footer);
-ssp_footer_t*  ssp_get_footer(const ssp_packet_t* packet);
+/**
+ *  Allocate new ssp_packet_t with it's payload size.
+ */
+ssp_packet_t* ssp_new_packet(u32 size, u8 flags);
 
-u32     ssp_pack_size(u32 payload_size, u8 footer);
-u32     ssp_seg_size(const ssp_segment_t* seg);
+/**
+ *  Returns the pointer to the packet's footer.
+ *  Returns NULL if packet has no footer.
+ */
+ssp_footer_t* ssp_get_footer(const ssp_packet_t* packet);
 
-u32     ssp_checksum32(const void* data, u64 size);
+/**
+ *  Calculate Packet Size based on payload size and flags.
+ */
+u64 ssp_calc_psize(u32 payload_size, u8 footer);
 
+/**
+ *  Get packet size. Header + Payload + footer (if it has footer)
+ */
+u64 ssp_packet_size(const ssp_packet_t* packet);
+
+/** 
+ *  Segment size. Segment header + Segment's Data
+ */
+u64 ssp_seg_size(const ssp_segment_t* seg);
+
+/**
+ * Serializes a packet from the `segbuf`.
+ * Returns a pointer to an `ssp_packet_t` structure allocated on the heap,
+ * ready for transmission over the network.
+ * The returned packet should be freed using the standard `free()` function.
+ *
+ * If `segbuf->count` is zero, returns NULL.
+ */
 ssp_packet_t* ssp_serialize_packet(ssp_segbuff_t* segbuf);
 
-void    ssp_segbuff_init(ssp_segbuff_t* segbuf, u32 init_size);
-void    ssp_segbuff_add(ssp_segbuff_t* segbuf, u16 type, u32 size, const void* data);
-void    ssp_segbuff_clear(ssp_segbuff_t* segbuf);
+/**
+ *  Initialize segbuff array with its initial size.
+ */
+void ssp_segbuff_init(ssp_segbuff_t* segbuf, u32 init_size);
 
-void    ssp_parse_buf(ssp_state_t* state, const void* buf, u64 buf_size);
+/**
+ *  Append pointer to data, and it's type and size.
+ */
+void ssp_segbuff_add(ssp_segbuff_t* segbuf, u16 type, u32 size, const void* data);
+
+/**
+ * Clears the segbuff array.
+ *
+ * This operation resets `segbuf->count` to zero and may resize the buffer.
+ */
+void ssp_segbuff_clear(ssp_segbuff_t* segbuf);
+
+/**
+ * Parses an arbitrary buffer containing received network data,
+ * and invokes the appropriate segment-map callbacks.
+ *
+ * Returns 0 (SSP_SUCCESS) on success when all segments have assigned callbacks.
+ * Returns 1 (SSP_SEGMAP_NO_ASSIGN) if successful but at least one segment did 
+ *  not have a callback assigned.
+ * Returns -1 (SSP_FAILED) if the data is invalid.
+ * Returns -2 (SSP_INCOMPLETE) if packet is incomplete.
+ * Returns -3 (SSP_NOT_USED) if all segments did not have a callback assigned.
+ * Returns 2 (SSP_MORE) if the buffer size is larger than the packet size, indicating
+ * that there might be additional data or another packet in the buffer 
+ * (e.g., in stream-based protocols like TCP).
+ */
+i32 ssp_parse_buf(ssp_state_t* state, const void* buf, u64 buf_size);
 
 #endif // _SSP_H_
