@@ -13,7 +13,7 @@ Here's a high-level overview of a packet:
 ```
 ### Header Details:
 ```
-[ [32-bit magic][32-bit size][8-bit flags][8-bit segment count] ]
+[ [32-bit magic][32-bit size][8-bit flags][8-bit segments] ]
 ```
 - `magic`: A unique identifier for the packet.
 - `size`: The size of the payload in bytes.
@@ -25,7 +25,7 @@ Here's a high-level overview of a packet:
     F - Footer Flag (FOOTER_BIT)
     R - Reserved
 ```
-- `segment count`: The number of segments present in the payload.
+- `segments`: The number of segments present in the payload.
 ### Payload Details:
 
 The payload is divided into _segments_, with each `segment` consisting of a type, size, and data:
