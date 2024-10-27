@@ -38,7 +38,7 @@ typedef struct
     u32 inc_size;   // How much to increase by
 } ssp_segbuff_t;
 
-typedef void (*ssp_segmap_callback_t)(const ssp_segment_t*, void*);
+typedef void (*ssp_segmap_callback_t)(const ssp_segment_t*, void* user_data, void* source_data);
 
 typedef struct 
 {
@@ -116,7 +116,9 @@ void ssp_segbuff_clear(ssp_segbuff_t* segbuf);
  * Returns 2 (SSP_MORE) if the buffer size is larger than the packet size, indicating
  * that there might be additional data or another packet in the buffer 
  * (e.g., in stream-based protocols like TCP).
+ *
+ * `source_data` - Pointer to metadata containing information about the origin of the network buffer.
  */
-i32 ssp_parse_buf(ssp_state_t* state, const void* buf, u64 buf_size);
+i32 ssp_parse_buf(ssp_state_t* state, const void* buf, u64 buf_size, void* source_data);
 
 #endif // _SSP_H_

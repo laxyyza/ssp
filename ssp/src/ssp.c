@@ -197,7 +197,7 @@ ssp_segbuff_clear(ssp_segbuff_t* segbuf)
 }
 
 static i32
-ssp_parse_payload(ssp_state_t* state, const ssp_packet_t* packet)
+ssp_parse_payload(ssp_state_t* state, const ssp_packet_t* packet, void* source_data)
 {
     i32 ret = SSP_SUCCESS;
     u32 offset = 0;
@@ -211,7 +211,7 @@ ssp_parse_payload(ssp_state_t* state, const ssp_packet_t* packet)
 
         if ((segmap_callback = ssp_get_segmap(state, segment->type)))
         {
-            segmap_callback(segment, state->user_data);
+            segmap_callback(segment, state->user_data, source_data);
             segmap_called = true;
         }
         else
@@ -223,7 +223,7 @@ ssp_parse_payload(ssp_state_t* state, const ssp_packet_t* packet)
 }
 
 i32
-ssp_parse_buf(ssp_state_t* state, const void* buf, u64 buf_size)
+ssp_parse_buf(ssp_state_t* state, const void* buf, u64 buf_size, void* source_data)
 {
     i32 ret;
     const ssp_packet_t* packet = buf;
@@ -248,7 +248,7 @@ ssp_parse_buf(ssp_state_t* state, const void* buf, u64 buf_size)
             return -1;
     }
 
-    ret = ssp_parse_payload(state, packet);
+    ret = ssp_parse_payload(state, packet, source_data);
 
     return (another_packet) ? SSP_MORE : ret;
 }
