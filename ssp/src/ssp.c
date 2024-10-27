@@ -11,7 +11,7 @@
 void 
 ssp_state_init(ssp_state_t* state)
 {
-    ssp_segbuff_init(&state->segbuf, 10);
+    ssp_segbuff_init(&state->segbuf, 10, 0);
     ght_init(&state->segment_map, 10, NULL);
 }
 
@@ -102,8 +102,13 @@ static u32
 ssp_get_segbuf_total_size(const ssp_segbuff_t* segbuf)
 {
     u32 total = 0;
+
+	if (segbuf->flags & SSP_SESSION_BIT)
+		total += sizeof(u32);
+
     for (u32 i = 0; i < segbuf->count; i++)
         total += segbuf->segments[i].size;
+
     return total;
 }
 
@@ -112,6 +117,12 @@ ssp_serialize(ssp_packet_t* packet, ssp_segbuff_t* segbuf)
 {
     u32 offset = 0;
     packet->header.segments = segbuf->count;
+
+	if (segbuf->flags & SSP_SESSION_BIT)
+	{
+		memcpy(packet->payload, &segbuf->session_id, sizeof(u32));
+		offset += sizeof(u32);
+	}
 
     for (u32 i = 0; i < segbuf->count; i++)
     {
@@ -132,14 +143,13 @@ ssp_serialize_packet(ssp_segbuff_t* segbuf)
     ssp_packet_t* packet;
     ssp_footer_t* footer;
     u32 payload_size;
-    u8  flags = SSP_FOOTER_BIT;
 
     if (segbuf->count == 0)
         return NULL;
 
     payload_size = ssp_get_segbuf_total_size(segbuf) + 
                     (sizeof(ssp_segment_t) * segbuf->count);
-    packet = ssp_new_packet(payload_size, flags);
+    packet = ssp_new_packet(payload_size, segbuf->flags);
 
     ssp_serialize(packet, segbuf);
 
@@ -152,13 +162,14 @@ ssp_serialize_packet(ssp_segbuff_t* segbuf)
 }
 
 void 
-ssp_segbuff_init(ssp_segbuff_t* segbuf, u32 init_size)
+ssp_segbuff_init(ssp_segbuff_t* segbuf, u32 init_size, u8 flags)
 {
     segbuf->segments = calloc(init_size, sizeof(ssp_seglisten_t));
     segbuf->size = init_size;
     segbuf->count = 0;
     segbuf->min_size = init_size;
     segbuf->inc_size = init_size;
+	segbuf->flags = flags;
 }
 
 void 
@@ -176,6 +187,13 @@ ssp_segbuff_resize(ssp_segbuff_t* segbuf, u32 new_size)
 void    
 ssp_segbuff_add(ssp_segbuff_t* segbuf, u16 type, u32 size, const void* data)
 {
+    for (u32 i = 0; i < segbuf->count; i++)
+	{
+        const ssp_seglisten_t* seglisten = segbuf->segments + i;
+		if (seglisten->data == data && seglisten->size == size)
+			return; // Dont duplicate data.
+	}
+
     ssp_seglisten_t* seglisten = segbuf->segments + segbuf->count;
     seglisten->type = type;
     seglisten->size = size;
@@ -204,6 +222,23 @@ ssp_parse_payload(ssp_state_t* state, const ssp_packet_t* packet, void* source_d
     ssp_segment_t* segment;
     ssp_segmap_callback_t segmap_callback;
     bool segmap_called = false;
+
+	if (packet->header.flags & SSP_SESSION_BIT)
+	{
+		const u32 session_id = *(u32*)packet->payload;
+
+		// Verify session ID...
+		if (state->verify_session)
+		{
+			void* new_source = NULL;
+			if (state->verify_session(session_id, state->user_data, source_data, &new_source) == false)
+				return SSP_FAILED;
+			if (new_source)
+				source_data = new_source;
+		}
+
+		offset += sizeof(u32);
+	}
 
     for (u32 i = 0; i < packet->header.segments; i++)
     {

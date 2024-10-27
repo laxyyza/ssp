@@ -28,6 +28,7 @@
  *          u8  segments
  *
  *      [ payload: {  6-UINT32_MAX bytes
+ *          session_id (optional SSP_SESSION_BIT)
  *          segment0, 6+ bytes
  *              u16 type
  *              u32 size
@@ -47,7 +48,8 @@
 #define SSP_MAGIC 0xCAFEBABE
 #define _SSP_PACKED __attribute__((packed))
 
-#define SSP_FOOTER_BIT 0x80
+#define SSP_FOOTER_BIT  0x80
+#define SSP_SESSION_BIT 0x40
 
 /**
  * Header structure:
@@ -56,9 +58,10 @@
  *
  *  flags bits:
  *     [0 1 2 3 4 5 6 7]
- *      F R R R R R R R
+ *      F S R R R R R R
  *      
  *      F - Footer
+ *      S - Session ID
  *      R - Reserve
  */
 typedef struct ssp_header

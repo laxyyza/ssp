@@ -36,14 +36,20 @@ typedef struct
     u32 min_size; 
     u32 count;      // How much is in use
     u32 inc_size;   // How much to increase by
+	u32 session_id;
+	u8  flags;		// Packet Flags
 } ssp_segbuff_t;
 
 typedef void (*ssp_segmap_callback_t)(const ssp_segment_t*, void* user_data, void* source_data);
+
+// Return false if failed
+typedef bool (*ssp_session_verify_callback_t)(u32 session_id, void* user_data, void* source_data, void** new_source);
 
 typedef struct 
 {
     ssp_segbuff_t segbuf;   // Segment Buffer
     ght_t segment_map;      // Segment Map (Segment Type Function-pointer map)
+	ssp_session_verify_callback_t verify_session;
     void* user_data;
 } ssp_state_t;
 
@@ -89,7 +95,7 @@ ssp_packet_t* ssp_serialize_packet(ssp_segbuff_t* segbuf);
 /**
  *  Initialize segbuff array with its initial size.
  */
-void ssp_segbuff_init(ssp_segbuff_t* segbuf, u32 init_size);
+void ssp_segbuff_init(ssp_segbuff_t* segbuf, u32 init_size, u8 flags);
 
 /**
  *  Append pointer to data, and it's type and size.
