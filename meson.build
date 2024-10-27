@@ -5,5 +5,6 @@ project('ssp', 'c',
     ]
 )
 
+subdir('ssp/lib/ght/')
 subdir('ssp/')
 subdir('tests/')

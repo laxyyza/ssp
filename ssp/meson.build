@@ -1,5 +1,3 @@
-subdir('lib/ght/ght')
-
 ssp_src = files(
     'src/ssp.c',
     'src/ssp_tcp.c'
