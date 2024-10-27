@@ -117,6 +117,25 @@ ssp_tcp_sock_close(ssp_tcp_sock_t* sock)
 }
 
 i32 
+ssp_tcp_send_segbuf(ssp_tcp_sock_t* sock, ssp_segbuff_t* segbuf)
+{
+	if (segbuf == NULL)
+		return -1;
+
+	i32 ret;
+	ssp_packet_t* packet;
+
+	packet = ssp_serialize_packet(segbuf);
+	if (packet == NULL)
+		return -1;
+
+	ret = ssp_tcp_send(sock, packet);
+	free(packet);
+
+	return ret;
+}
+
+i32 
 ssp_tcp_send(ssp_tcp_sock_t* sock, const ssp_packet_t* packet)
 {
     if (packet == NULL)
