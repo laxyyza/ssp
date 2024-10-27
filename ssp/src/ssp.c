@@ -176,9 +176,6 @@ ssp_segbuff_resize(ssp_segbuff_t* segbuf, u32 new_size)
 void    
 ssp_segbuff_add(ssp_segbuff_t* segbuf, u16 type, u32 size, const void* data)
 {
-    if (data == NULL)
-        return;
-
     ssp_seglisten_t* seglisten = segbuf->segments + segbuf->count;
     seglisten->type = type;
     seglisten->size = size;
