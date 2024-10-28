@@ -1,12 +1,6 @@
 #include "ssp_tcp.h"
-#include "ssp.h"
-#include "ssp_struct.h"
-#include <asm-generic/socket.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <string.h>
+
 
 i32 
 ssp_tcp_sock_create(ssp_tcp_sock_t* sock, enum ssp_sockdomain ssp_domain)
@@ -86,7 +80,7 @@ ssp_tcp_server(ssp_tcp_sock_t* sock, enum ssp_sockdomain domain, u16 port)
 
     int opt = 1;
 
-    if (setsockopt(sock->sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(int)) == -1)
+    if (setsockopt(sock->sockfd, SOL_SOCKET, SO_REUSEADDR, (void*)&opt, sizeof(int)) == -1)
     {
         perror("setsockopt");
         goto err;
@@ -113,7 +107,12 @@ err:
 void 
 ssp_tcp_sock_close(ssp_tcp_sock_t* sock)
 {
+#ifdef __linux__
     close(sock->sockfd);
+#endif
+#ifdef _WIN32
+	closesocket(sock->sockfd);
+#endif
 }
 
 i32 
@@ -146,7 +145,7 @@ ssp_tcp_send(ssp_tcp_sock_t* sock, const ssp_packet_t* packet)
     u32 packet_size = ssp_packet_size(packet);
     ssp_footer_t* footer = ssp_get_footer(packet);
 
-    printf("Sending %u bytes (%u segments): [header: %lu, payload: %u, footer: %lu ",
+    printf("Sending %u bytes (%u segments): [header: %llu, payload: %u, footer: %llu ",
            packet_size, packet->header.segments, 
            sizeof(ssp_header_t), packet->header.size, 
            (sizeof(ssp_footer_t) * add_footer));
@@ -154,7 +153,7 @@ ssp_tcp_send(ssp_tcp_sock_t* sock, const ssp_packet_t* packet)
         printf("[checksum: %X]", footer->checksum);
     printf("]\n");
 
-    if ((ret = send(sock->sockfd, packet, packet_size, 0)) == -1)
+    if ((ret = send(sock->sockfd, (void*)packet, packet_size, 0)) == -1)
         perror("send");
 
     return ret;

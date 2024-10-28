@@ -2,12 +2,21 @@
 #define _SSP_TCP_H_
 
 #include "ssp.h"
-#include <stdbool.h>
 
+#ifdef __linux__
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include <sys/socket.h>
+
+
+typedef i32 sock_t;
+
+#endif // __linux__
+#ifdef _WIN32
+#include <ws2tcpip.h>
+
+typedef SOCKET sock_t;
+#endif // _WIN32
 
 enum ssp_sockdomain
 {
@@ -28,7 +37,7 @@ typedef struct
 
 typedef struct ssp_tcp_sock
 {
-    i32 sockfd;
+    sock_t sockfd;
     ssp_addr_t addr;
     char ipstr[INET6_ADDRSTRLEN];
     bool connected;

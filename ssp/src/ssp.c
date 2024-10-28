@@ -1,12 +1,5 @@
 #include "ssp.h"
-#include "ght.h"
-#include "ssp_struct.h"
-#include "sspint.h"
-#include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
-#include <stdbool.h>
 
 void 
 ssp_state_init(ssp_state_t* state)
