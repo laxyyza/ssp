@@ -145,7 +145,7 @@ ssp_tcp_send(ssp_tcp_sock_t* sock, const ssp_packet_t* packet)
     u32 packet_size = ssp_packet_size(packet);
     ssp_footer_t* footer = ssp_get_footer(packet);
 
-    printf("Sending %u bytes (%u segments): [header: %llu, payload: %u, footer: %llu ",
+    printf("Sending %u bytes (%u segments): [header: %zu, payload: %u, footer: %zu ",
            packet_size, packet->header.segments, 
            sizeof(ssp_header_t), packet->header.size, 
            (sizeof(ssp_footer_t) * add_footer));

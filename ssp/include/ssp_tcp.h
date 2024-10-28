@@ -7,7 +7,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
-
+#include <unistd.h>
 
 typedef i32 sock_t;
 
