@@ -37,17 +37,23 @@ typedef struct
     u32 count;      // How much is in use
     u32 inc_size;   // How much to increase by
 	u32 session_id;
+	u16 seqc_sent;
+	u16 seqc_recv;
 	u8  flags;		// Packet Flags
 } ssp_segbuff_t;
 
 typedef void (*ssp_segmap_callback_t)(const ssp_segment_t*, void* user_data, void* source_data);
 
 // Return false if failed
-typedef bool (*ssp_session_verify_callback_t)(u32 session_id, void* user_data, void* source_data, void** new_source);
+typedef bool (*ssp_session_verify_callback_t)(u32 session_id, 
+											  void* user_data, 
+											  void* source_data, 
+											  void** new_source,
+											  ssp_segbuff_t** segbuf);
 
 typedef struct 
 {
-    ssp_segbuff_t segbuf;   // Segment Buffer
+    // ssp_segbuff_t segbuf;   // Segment Buffer
     ght_t segment_map;      // Segment Map (Segment Type Function-pointer map)
 	ssp_session_verify_callback_t verify_session;
     void* user_data;
@@ -125,6 +131,6 @@ void ssp_segbuff_clear(ssp_segbuff_t* segbuf);
  *
  * `source_data` - Pointer to metadata containing information about the origin of the network buffer.
  */
-i32 ssp_parse_buf(ssp_state_t* state, const void* buf, u64 buf_size, void* source_data);
+i32 ssp_parse_buf(ssp_state_t* state, ssp_segbuff_t* segbuf, const void* buf, u64 buf_size, void* source_data);
 
 #endif // _SSP_H_
