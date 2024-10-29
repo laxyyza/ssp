@@ -182,7 +182,7 @@ ssp_segbuff_resize(ssp_segbuff_t* segbuf, u32 new_size)
     if (new_size == segbuf->size)
         return;
 
-    segbuf->segments = realloc(segbuf->segments, new_size);
+    segbuf->segments = realloc(segbuf->segments, new_size * sizeof(ssp_seglisten_t));
     segbuf->size = new_size;
 }
 
