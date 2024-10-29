@@ -98,6 +98,7 @@ u64 ssp_seg_size(const ssp_segment_t* seg);
  */
 ssp_packet_t* ssp_serialize_packet(ssp_segbuff_t* segbuf);
 
+ssp_packet_t* ssp_insta_packet(ssp_segbuff_t* source_segbuf, u16 type, const void* buf, u64 size);
 /**
  *  Initialize segbuff array with its initial size.
  */

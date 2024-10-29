@@ -163,6 +163,31 @@ ssp_serialize_packet(ssp_segbuff_t* segbuf)
     return packet;
 }
 
+ssp_packet_t* 
+ssp_insta_packet(ssp_segbuff_t* source_segbuf, u16 type, const void* buf, u64 size)
+{
+	ssp_packet_t* ret;
+	ssp_seglisten_t segment = {
+		.data = buf,
+		.size = size,
+		.type = type
+	};
+	ssp_segbuff_t segbuf = {
+		.count = 1,
+		.size = 1,
+		.min_size = 1,
+		.session_id = source_segbuf->session_id,
+		.flags = source_segbuf->flags,
+		.seqc_sent = source_segbuf->seqc_sent,
+		.segments = &segment
+	};
+
+	ret = ssp_serialize_packet(&segbuf);
+	source_segbuf->seqc_sent = segbuf.seqc_sent;
+
+	return ret;
+}
+
 void 
 ssp_segbuff_init(ssp_segbuff_t* segbuf, u32 init_size, u8 flags)
 {
