@@ -113,6 +113,7 @@ ssp_tcp_sock_close(ssp_tcp_sock_t* sock)
 #ifdef _WIN32
 	closesocket(sock->sockfd);
 #endif
+	sock->connected = false;
 }
 
 i32 
