@@ -5,8 +5,13 @@
 void 
 ssp_state_init(ssp_state_t* state)
 {
-    // ssp_segbuff_init(&state->segbuf, 10, 0);
     ght_init(&state->segment_map, 10, NULL);
+}
+
+void 
+ssp_state_destroy(ssp_state_t* state)
+{
+	ght_destroy(&state->segment_map);
 }
 
 void 
@@ -24,9 +29,16 @@ ssp_get_segmap(ssp_state_t* state, u16 segtype)
 u64 
 ssp_calc_psize(u32 payload_size, u8 flags)
 {
-    return sizeof(ssp_packet_t) + 
-            payload_size + 
-            (sizeof(ssp_footer_t) * ((flags & SSP_FOOTER_BIT) >> 7));
+	u64 packet_size = sizeof(ssp_header_t) + payload_size;
+
+	if (flags & SSP_FOOTER_BIT)
+		packet_size += sizeof(ssp_footer_t);
+	if (flags & SSP_SESSION_BIT)
+		packet_size += sizeof(u32);
+	if (flags & SSP_SEQUENCE_COUNT_BIT)
+		packet_size += sizeof(u16);
+
+	return packet_size;
 }
 
 u64 
@@ -239,6 +251,12 @@ ssp_segbuff_clear(ssp_segbuff_t* segbuf)
 
     segbuf->count = 0;
     ssp_segbuff_resize(segbuf, segbuf->min_size);
+}
+
+void 
+ssp_segbuff_destroy(ssp_segbuff_t* segbuf)
+{
+	free(segbuf->segments);
 }
 
 static i32

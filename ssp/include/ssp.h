@@ -1,6 +1,5 @@
 #ifndef _SSP_H_
 #define _SSP_H_
-
 #include "ssp_struct.h"
 #include <ght.h>
 
@@ -60,6 +59,7 @@ typedef struct
 } ssp_state_t;
 
 void ssp_state_init(ssp_state_t* state);
+void ssp_state_destroy(ssp_state_t* state);
 void ssp_segmap(ssp_state_t* state, u16 segtype, ssp_segmap_callback_t callback);
 
 /**
@@ -115,6 +115,8 @@ void ssp_segbuff_add(ssp_segbuff_t* segbuf, u16 type, u32 size, const void* data
  * This operation resets `segbuf->count` to zero and may resize the buffer.
  */
 void ssp_segbuff_clear(ssp_segbuff_t* segbuf);
+
+void ssp_segbuff_destroy(ssp_segbuff_t* segbuf);
 
 /**
  * Parses an arbitrary buffer containing received network data,
