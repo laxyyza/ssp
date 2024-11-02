@@ -346,7 +346,7 @@ ssp_parse_buf(ssp_state_t* state, ssp_segbuff_t* segbuf, const void* buf, u64 bu
 		{
 			printf("Corrupt packet. Checksum mismatch: 0x%X != 0x%X\n",
 					our_checksum, footer->checksum);
-            return -1;
+            return SSP_FAILED;
 		}
     }
 
