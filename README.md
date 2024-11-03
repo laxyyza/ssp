@@ -9,7 +9,7 @@ This project includes both the protocol specification and its implementation as 
 ## Protocol Structure
 Here's a high-level overview of a packet:
 ```
-[ [ header ] [ payload: {segment0, segment1, ...} ] [ footer (optional) ] ]
+[ [ header ] [ payload: [session_id (optional)][sequence count (optional)] {segment0, segment1, ...} ] [ footer (optional) ] ]
 ```
 ### Header Details:
 ```
@@ -20,10 +20,14 @@ Here's a high-level overview of a packet:
 - `flags`: Options for the packet, represented by flag bits:
 ```
 [0 1 2 3 4 5 6 7]
- F R R R R R R R
+ F S Q Z R R R R
 
-    F - Footer Flag (FOOTER_BIT)
-    R - Reserved
+  0: F - Footer Flag (FOOTER_BIT)
+  1: S - Session id  
+  2: Q - seQuence count
+  3: Z - Zstd payload compression.
+4-7: R - Reserved
+
 ```
 - `segments`: The number of segments present in the payload.
 ### Payload Details:
