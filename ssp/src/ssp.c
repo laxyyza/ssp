@@ -129,7 +129,7 @@ ssp_serialize(ssp_packet_t* packet, ssp_segbuff_t* segbuf)
     packet->header.segments = segbuf->count;
 
 	if (packet->header.flags & SSP_ZSTD_COMPRESSION_BIT || 
-		(segbuf->auto_compression && packet->header.size > segbuf->auto_compression_threshold))
+		(segbuf->compression.auto_do && packet->header.size > segbuf->compression.threshold))
 	{
 		payload = malloc(packet->header.size);
 		packet->header.flags |= SSP_ZSTD_COMPRESSION_BIT;
@@ -163,7 +163,7 @@ ssp_serialize(ssp_packet_t* packet, ssp_segbuff_t* segbuf)
 
 	if (packet->header.flags & SSP_ZSTD_COMPRESSION_BIT)
 	{
-		u64 compressed_size = ZSTD_compress(packet->payload, ZSTD_compressBound(packet->header.size), payload, packet->header.size, 2);
+		u64 compressed_size = ZSTD_compress(packet->payload, ZSTD_compressBound(packet->header.size), payload, packet->header.size, segbuf->compression.level);
 		if (ZSTD_isError(compressed_size))
 		{
 			fprintf(stderr, "ZSTD_compress FAILED: %s\n", ZSTD_getErrorName(compressed_size));

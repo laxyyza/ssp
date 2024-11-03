@@ -39,8 +39,11 @@ typedef struct
 	u16 seqc_sent;
 	u16 seqc_recv;
 	u8  flags;		// Packet Flags
-	bool auto_compression;
-	u32  auto_compression_threshold; 
+	struct {
+		bool auto_do;
+		u32  threshold;
+		i32  level;
+	} compression;
 } ssp_segbuff_t;
 
 typedef void (*ssp_segmap_callback_t)(const ssp_segment_t*, void* user_data, void* source_data);
