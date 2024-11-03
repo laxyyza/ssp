@@ -9,7 +9,7 @@ This project includes both the protocol specification and its implementation as 
 ## Protocol Structure
 Here's a high-level overview of a packet:
 ```
-[ [ header ] [ payload: [session_id (optional)][sequence count (optional)] {segment0, segment1, ...} ] [ footer (optional) ] ]
+[ [ header ] [ payload: {segment0, segment1, ...} ] [ footer (optional) ] ]
 ```
 ### Header Details:
 ```
@@ -22,17 +22,17 @@ Here's a high-level overview of a packet:
 [0 1 2 3 4 5 6 7]
  F S Q Z R R R R
 
-  0: F - Footer Flag (FOOTER_BIT)
-  1: S - Session id  
-  2: Q - seQuence count
-  3: Z - Zstd payload compression.
+  0: F - Footer Flag (SSP_FOOTER_BIT)
+  1: S - Session id  (SSP_SESSION_BIT)
+  2: Q - seQuence count (SSP_SEQUENCE_COUNT_BIT)
+  3: Z - Zstd payload compression. (SSP_ZSTD_COMPRESSION_BIT)
 4-7: R - Reserved
 
 ```
 - `segments`: The number of segments present in the payload.
 ### Payload Details:
 
-The payload is divided into _segments_, with each `segment` consisting of a type, size, and data:
+The payload is divided into _segments_ (after optional session id and sequence count), with each `segment` consisting of a type, size, and data:
 ```
 [ [16-bit type][32-bit size][data ...] ]
 ```
