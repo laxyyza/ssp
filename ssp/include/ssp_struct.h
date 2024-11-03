@@ -52,6 +52,7 @@
 #define SSP_FOOTER_BIT			0x80
 #define SSP_SESSION_BIT			0x40
 #define SSP_SEQUENCE_COUNT_BIT	0x20
+#define SSP_ZSTD_COMPRESSION_BIT	0x10
 
 /**
  * Header structure:
@@ -60,12 +61,13 @@
  *
  *  flags bits:
  *     [0 1 2 3 4 5 6 7]
- *      F S Q R R R R R
+ *      F S Q Z R R R R
  *      
- *      F - Footer
- *      S - Session id
- *      Q - seQuence count 
- *      R - Reserve
+ *      F (0)	- Footer
+ *      S (1)	- Session id
+ *      Q (2)	- seQuence count 
+ *      Z (3)	- Zstd packet compression.
+ *      R (4-7) - Reserve
  */
 typedef struct ssp_header
 {

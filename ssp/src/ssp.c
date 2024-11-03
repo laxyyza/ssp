@@ -1,6 +1,7 @@
 #include "ssp.h"
 #include <string.h>
 #include <stdio.h>
+#include <zstd.h>
 
 void 
 ssp_state_init(ssp_state_t* state)
@@ -124,24 +125,34 @@ static void
 ssp_serialize(ssp_packet_t* packet, ssp_segbuff_t* segbuf)
 {
     u32 offset = 0;
+	void* payload;
     packet->header.segments = segbuf->count;
+
+	if (packet->header.flags & SSP_ZSTD_COMPRESSION_BIT || 
+		(segbuf->auto_compression && packet->header.size > segbuf->auto_compression_threshold))
+	{
+		payload = malloc(packet->header.size);
+		packet->header.flags |= SSP_ZSTD_COMPRESSION_BIT;
+	}
+	else
+		payload = packet->payload;
 
 	if (segbuf->flags & SSP_SESSION_BIT)
 	{
-		memcpy(packet->payload + offset, &segbuf->session_id, sizeof(u32));
+		memcpy(payload + offset, &segbuf->session_id, sizeof(u32));
 		offset += sizeof(u32);
 	}
 	if (segbuf->flags & SSP_SEQUENCE_COUNT_BIT)
 	{
 		segbuf->seqc_sent++;
-		memcpy(packet->payload + offset, &segbuf->seqc_sent, sizeof(u16));
+		memcpy(payload + offset, &segbuf->seqc_sent, sizeof(u16));
 		offset += sizeof(u16);
 	}
 
     for (u32 i = 0; i < segbuf->count; i++)
     {
         const ssp_seglisten_t* seglisten = segbuf->segments + i;
-        ssp_segment_t* segment = (ssp_segment_t*)(packet->payload + offset);
+        ssp_segment_t* segment = (ssp_segment_t*)(payload + offset);
 
         segment->type = seglisten->type;
         segment->size = seglisten->size;
@@ -149,6 +160,23 @@ ssp_serialize(ssp_packet_t* packet, ssp_segbuff_t* segbuf)
 
         offset += segment->size + sizeof(ssp_segment_t);
     }
+
+	if (packet->header.flags & SSP_ZSTD_COMPRESSION_BIT)
+	{
+		u64 compressed_size = ZSTD_compress(packet->payload, ZSTD_compressBound(packet->header.size), payload, packet->header.size, 2);
+		if (ZSTD_isError(compressed_size))
+		{
+			fprintf(stderr, "ZSTD_compress FAILED: %s\n", ZSTD_getErrorName(compressed_size));
+			packet->header.flags ^= SSP_ZSTD_COMPRESSION_BIT;
+			memcpy(packet->payload, payload, packet->header.size);
+		}
+		else
+		{
+			printf("SSP Packet payload compressed from %u -> %zu bytes.\n", 
+				packet->header.size, compressed_size);
+			packet->header.size = compressed_size;
+		}
+	}
 }
 
 ssp_packet_t* 
@@ -168,7 +196,7 @@ ssp_serialize_packet(ssp_segbuff_t* segbuf)
     ssp_serialize(packet, segbuf);
 
     if ((footer = ssp_get_footer(packet)))
-        footer->checksum = ssp_checksum32(packet, ssp_calc_psize(payload_size, 0));
+        footer->checksum = ssp_checksum32(packet, ssp_calc_psize(packet->header.size, 0));
 
     ssp_segbuff_clear(segbuf);
 
@@ -265,13 +293,30 @@ ssp_parse_payload(ssp_state_t* state, ssp_segbuff_t* segbuf,
 {
     i32 ret = SSP_SUCCESS;
     u32 offset = 0;
+	void* payload;
     ssp_segment_t* segment;
     ssp_segmap_callback_t segmap_callback;
     bool segmap_called = false;
 
+	if (packet->header.flags & SSP_ZSTD_COMPRESSION_BIT)
+	{
+		u32 og_size = ZSTD_getFrameContentSize(packet->payload, packet->header.size);
+		payload = malloc(og_size);
+		u64 decompress_size = ZSTD_decompress(payload, og_size, packet->payload, packet->header.size);
+		if (ZSTD_isError(decompress_size))
+		{
+			fprintf(stderr, "ZSTD_decompress FAILED: %s\n", ZSTD_getErrorName(decompress_size));
+			free(payload);
+			return SSP_FAILED;
+		}
+		printf("SSP Payload decompressed from: %u -> %zu (og: %u)\n", packet->header.size, decompress_size, og_size);
+	}
+	else
+		payload = (void*)packet->payload;
+
 	if (packet->header.flags & SSP_SESSION_BIT)
 	{
-		const u32 session_id = *(u32*)(packet->payload + offset);
+		const u32 session_id = *(u32*)(payload + offset);
 
 		// Verify session ID...
 		if (state->verify_session)
@@ -289,7 +334,7 @@ ssp_parse_payload(ssp_state_t* state, ssp_segbuff_t* segbuf,
 	{
 		if (segbuf)
 		{
-			const u16 seqc_recv = *(u16*)(packet->payload + offset);
+			const u16 seqc_recv = *(u16*)(payload + offset);
 
 			if (segbuf->seqc_recv + 1 != seqc_recv)
 			{
@@ -305,7 +350,7 @@ ssp_parse_payload(ssp_state_t* state, ssp_segbuff_t* segbuf,
 
     for (u32 i = 0; i < packet->header.segments; i++)
     {
-        segment = (ssp_segment_t*)(packet->payload + offset);
+        segment = (ssp_segment_t*)(payload + offset);
 
         if ((segmap_callback = ssp_get_segmap(state, segment->type)))
         {
@@ -317,6 +362,8 @@ ssp_parse_payload(ssp_state_t* state, ssp_segbuff_t* segbuf,
 
         offset += segment->size + sizeof(ssp_segment_t);
     }
+	if (packet->header.flags & SSP_ZSTD_COMPRESSION_BIT)
+		free(payload);
     return (segmap_called) ? ret : SSP_NOT_USED;
 }
 

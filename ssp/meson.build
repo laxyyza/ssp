@@ -4,6 +4,8 @@ ssp_src = files(
 )
 ssp_include = include_directories('include/')
 
+zstd_dep = dependency('zstd', modules: ['zstd::libzstd'], required: true)
+
 libssp = library('ssp', ssp_src, 
     include_directories: [
         ssp_include,
@@ -11,5 +13,6 @@ libssp = library('ssp', ssp_src,
     ],
     link_with: [
         libght
-    ]
+    ],
+    dependencies: [zstd_dep]
 )
