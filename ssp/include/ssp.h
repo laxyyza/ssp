@@ -44,6 +44,12 @@ typedef struct
 		u32  threshold;
 		i32  level;
 	} compression;
+
+	struct {
+		ssp_packet_t* packet;
+		u64	packet_size;
+		u64 current_size;
+	} recv_incomplete;
 } ssp_segbuff_t;
 
 typedef void (*ssp_segmap_callback_t)(const ssp_segment_t*, void* user_data, void* source_data);

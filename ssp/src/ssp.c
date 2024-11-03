@@ -300,6 +300,7 @@ ssp_parse_payload(ssp_state_t* state, ssp_segbuff_t* segbuf,
 
 	if (packet->header.flags & SSP_ZSTD_COMPRESSION_BIT)
 	{
+		printf("ZSTD\n");
 		u32 og_size = ZSTD_getFrameContentSize(packet->payload, packet->header.size);
 		payload = malloc(og_size);
 		u64 decompress_size = ZSTD_decompress(payload, og_size, packet->payload, packet->header.size);
@@ -377,12 +378,36 @@ ssp_parse_buf(ssp_state_t* state, ssp_segbuff_t* segbuf, const void* buf, u64 bu
     u64 packet_size;
     bool another_packet = false;
 
+	if (segbuf && segbuf->recv_incomplete.packet)
+	{
+		memcpy((u8*)segbuf->recv_incomplete.packet + segbuf->recv_incomplete.current_size, buf, buf_size);
+		segbuf->recv_incomplete.current_size += buf_size;
+
+		if (segbuf->recv_incomplete.current_size < segbuf->recv_incomplete.packet_size)
+			return SSP_INCOMPLETE;
+
+		packet = segbuf->recv_incomplete.packet;
+		buf_size = segbuf->recv_incomplete.current_size;
+		segbuf->recv_incomplete.current_size = segbuf->recv_incomplete.packet_size = 0;
+	}
+
     if (packet->header.magic != SSP_MAGIC)
         return SSP_FAILED;
 
     packet_size = ssp_packet_size(packet);
     if (packet_size > buf_size)
-        return SSP_INCOMPLETE;
+    {
+		if (segbuf)
+		{
+			segbuf->recv_incomplete.packet = calloc(1, packet_size);
+			memcpy(segbuf->recv_incomplete.packet, buf, buf_size);
+			segbuf->recv_incomplete.packet_size = packet_size;
+			segbuf->recv_incomplete.current_size = buf_size;
+		}
+		else
+			fprintf(stderr, "WARNING: ssp_parse_buf: segbuf is NULL and packet is incomplete!\n");
+		return SSP_INCOMPLETE;
+	}
     else if (packet_size < buf_size)
         another_packet = true;
 
@@ -398,6 +423,12 @@ ssp_parse_buf(ssp_state_t* state, ssp_segbuff_t* segbuf, const void* buf, u64 bu
     }
 
     ret = ssp_parse_payload(state, segbuf, packet, source_data);
+
+	if (segbuf && segbuf->recv_incomplete.packet && segbuf->recv_incomplete.packet_size == 0)
+	{
+		free(segbuf->recv_incomplete.packet);
+		segbuf->recv_incomplete.packet = NULL;
+	}
 
     return (another_packet) ? SSP_MORE : ret;
 }
