@@ -300,7 +300,6 @@ ssp_parse_payload(ssp_state_t* state, ssp_segbuff_t* segbuf,
 
 	if (packet->header.flags & SSP_ZSTD_COMPRESSION_BIT)
 	{
-		printf("ZSTD\n");
 		u32 og_size = ZSTD_getFrameContentSize(packet->payload, packet->header.size);
 		payload = malloc(og_size);
 		u64 decompress_size = ZSTD_decompress(payload, og_size, packet->payload, packet->header.size);
