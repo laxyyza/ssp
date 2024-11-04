@@ -24,8 +24,8 @@
  *      [ header ] 10 bytes
  *          u32 magic
  *          u8  flags
- *          u8-16 payload_size
  *          u8  segments
+ *          u8-16 payload_size
  *
  *      [ payload: {  6-UINT32_MAX bytes
  *          session_id (optional SSP_SESSION_BIT)
@@ -79,13 +79,26 @@ typedef struct ssp_header
     u8 size[];      // Payload Size
 } _SSP_PACKED ssp_header_t;
 
-// TODO: Implement dynamic-sized segment header
+/**
+ *	Segment Header:
+ *
+ *	[
+ *		[ byte 0
+ *			[1-bit 16-bit payload size]
+ *			[7-bit data type]
+ *		] 
+ *		[8-16 bit data size] byte 1-2
+ *		[data...] byte 2-3+
+ *	]
+ */
+#define SSP_SEGMENT_16BIT_PAYLOAD 0x80
+
 typedef struct ssp_segment
 {
-    u16 type;
+    u8  type;
     u16 size;
-    u8  data[];
-} _SSP_PACKED ssp_segment_t;
+	u8* data;
+} ssp_segment_t;
 
 typedef struct ssp_footer
 {

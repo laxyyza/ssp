@@ -13,8 +13,8 @@
 
 typedef struct 
 {
-    u16 type;
-    u32 size;
+    u8 type;
+    u16 size;
     const void* data;
 } ssp_seglisten_t;
 
@@ -107,7 +107,7 @@ void ssp_segbuff_init(ssp_segbuff_t* segbuf, u32 init_size, u8 flags);
 /**
  *  Append pointer to data, and it's type and size.
  */
-void ssp_segbuff_add(ssp_segbuff_t* segbuf, u16 type, u32 size, const void* data);
+void ssp_segbuff_add(ssp_segbuff_t* segbuf, u8 type, u16 size, const void* data);
 
 /**
  * Clears the segbuff array.
