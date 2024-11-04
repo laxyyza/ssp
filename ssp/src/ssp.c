@@ -27,62 +27,80 @@ ssp_get_segmap(ssp_state_t* state, u16 segtype)
     return ght_get(&state->segment_map, segtype);
 }
 
-u64 
+u32 
 ssp_calc_psize(u32 payload_size, u8 flags)
 {
-	u64 packet_size = sizeof(ssp_header_t) + payload_size;
+	u16 header_size = sizeof(ssp_header_t);
+	u32 packet_size = payload_size;
 
+	if (flags & SSP_16_BIT_PAYLOAD_BIT)
+		header_size += sizeof(u16); // +2 bytes
+	else
+		header_size += sizeof(u8); //  +1 byte
+	
 	if (flags & SSP_FOOTER_BIT)
-		packet_size += sizeof(ssp_footer_t);
+		packet_size += sizeof(ssp_footer_t); // +4 bytes
 	if (flags & SSP_SESSION_BIT)
-		packet_size += sizeof(u32);
+		packet_size += sizeof(u32);	// +4 bytes
 	if (flags & SSP_SEQUENCE_COUNT_BIT)
-		packet_size += sizeof(u16);
+		packet_size += sizeof(u16);	// +2 bytes
+
+	packet_size += header_size;
 
 	return packet_size;
 }
 
-u64 
-ssp_packet_size(const ssp_packet_t* packet)
-{
-    return ssp_calc_psize(packet->header.size,
-                          packet->header.flags);
-}
-
-u64 
+u32 
 ssp_checksum_size(const ssp_packet_t* packet)
 {
-    return ssp_calc_psize(packet->header.size, 0);
+	return packet->header_size + packet->payload_size;
 }
 
-u64 
-ssp_seg_size(const ssp_segment_t* seg)
+static void
+ssp_set_header_payload_size(ssp_packet_t* packet, u32 payload_size)
 {
-    return sizeof(ssp_segment_t) + seg->size;
+	u8 header_size = sizeof(ssp_header_t);
+	u8 footer_size = (packet->header->flags & SSP_FOOTER_BIT) ? sizeof(ssp_footer_t) : 0;
+
+	if (packet->header->flags & SSP_16_BIT_PAYLOAD_BIT)
+	{
+		*(u16*)packet->header->size = (u16)payload_size;
+		header_size += sizeof(u16);
+	}
+	else
+	{
+		packet->header->size[0] = (u8)payload_size;
+		header_size += sizeof(u8);
+	}
+	packet->size = header_size + payload_size + footer_size;
+	packet->payload_size = payload_size;
+	packet->header_size = header_size;
 }
 
 ssp_packet_t*
 ssp_new_packet(u32 size, u8 flags)
 {
     ssp_packet_t* packet;
+	u32 packet_size;;
+	if (size >= UINT8_MAX)
+		flags |= SSP_16_BIT_PAYLOAD_BIT;
 
-    packet = calloc(1, ssp_calc_psize(size, flags));
-    packet->header.magic = SSP_MAGIC;
-    packet->header.flags = flags;
-    packet->header.size = size;
+	packet_size = ssp_calc_psize(size, flags);
+
+	packet = malloc(sizeof(ssp_packet_t));
+    packet->buf = calloc(1, packet_size);
+	packet->header = packet->buf;
+    packet->header->magic = SSP_MAGIC;
+    packet->header->flags = flags;
+	ssp_set_header_payload_size(packet, size);
+
+	packet->payload = (u8*)packet->buf + packet->header_size;
+	if (flags & SSP_FOOTER_BIT)
+		packet->footer = (ssp_footer_t*)((u8*)packet->payload + size);
+	else
+		packet->footer = NULL;
 
     return packet;
-}
-
-ssp_footer_t*  
-ssp_get_footer(const ssp_packet_t* packet)
-{
-    uint8_t* u8packet = (u8*)packet;
-    ssp_footer_t* footer;
-    if (packet == NULL || packet->header.size == 0 || (packet->header.flags & SSP_FOOTER_BIT) == 0)
-        return NULL;
-    footer = (ssp_footer_t*)(u8packet + (sizeof(ssp_packet_t) + packet->header.size));
-    return footer;
 }
 
 u32 
@@ -126,13 +144,13 @@ ssp_serialize(ssp_packet_t* packet, ssp_segbuff_t* segbuf)
 {
     u32 offset = 0;
 	void* payload;
-    packet->header.segments = segbuf->count;
+    packet->header->segments = segbuf->count;
 
-	if (packet->header.flags & SSP_ZSTD_COMPRESSION_BIT || 
-		(segbuf->compression.auto_do && packet->header.size > segbuf->compression.threshold))
+	if (packet->header->flags & SSP_ZSTD_COMPRESSION_BIT || 
+		(segbuf->compression.auto_do && packet->payload_size > segbuf->compression.threshold))
 	{
-		payload = malloc(packet->header.size);
-		packet->header.flags |= SSP_ZSTD_COMPRESSION_BIT;
+		payload = malloc(packet->size);
+		packet->header->flags |= SSP_ZSTD_COMPRESSION_BIT;
 	}
 	else
 		payload = packet->payload;
@@ -161,21 +179,28 @@ ssp_serialize(ssp_packet_t* packet, ssp_segbuff_t* segbuf)
         offset += segment->size + sizeof(ssp_segment_t);
     }
 
-	if (packet->header.flags & SSP_ZSTD_COMPRESSION_BIT)
+	if (packet->header->flags & SSP_ZSTD_COMPRESSION_BIT)
 	{
-		u64 compressed_size = ZSTD_compress(packet->payload, ZSTD_compressBound(packet->header.size), payload, packet->header.size, segbuf->compression.level);
+		u64 compressed_size = ZSTD_compress(
+									  packet->payload, 
+									  ZSTD_compressBound(packet->payload_size), 
+									  payload, 
+									  packet->payload_size, 
+									  segbuf->compression.level);
+
 		if (ZSTD_isError(compressed_size))
 		{
 			fprintf(stderr, "ZSTD_compress FAILED: %s\n", ZSTD_getErrorName(compressed_size));
-			packet->header.flags ^= SSP_ZSTD_COMPRESSION_BIT;
-			memcpy(packet->payload, payload, packet->header.size);
+			packet->header->flags ^= SSP_ZSTD_COMPRESSION_BIT;
+			memcpy(packet->payload, payload, packet->payload_size);
 		}
 		else
 		{
 			printf("SSP Packet payload compressed from %u -> %zu bytes.\n", 
-				packet->header.size, compressed_size);
-			packet->header.size = compressed_size;
+				packet->payload_size, compressed_size);
+			ssp_set_header_payload_size(packet, compressed_size);
 		}
+		free(payload);
 	}
 }
 
@@ -183,7 +208,6 @@ ssp_packet_t*
 ssp_serialize_packet(ssp_segbuff_t* segbuf)
 {
     ssp_packet_t* packet;
-    ssp_footer_t* footer;
     u32 payload_size;
 
     if (segbuf->count == 0)
@@ -195,12 +219,22 @@ ssp_serialize_packet(ssp_segbuff_t* segbuf)
 
     ssp_serialize(packet, segbuf);
 
-    if ((footer = ssp_get_footer(packet)))
-        footer->checksum = ssp_checksum32(packet, ssp_calc_psize(packet->header.size, 0));
+    if (packet->footer)
+		packet->footer->checksum = ssp_checksum32(packet->buf, ssp_checksum_size(packet));
 
     ssp_segbuff_clear(segbuf);
 
     return packet;
+}
+
+void 
+ssp_packet_free(ssp_packet_t* packet)
+{
+	if (packet == NULL)
+		return;
+
+	free(packet->buf);
+	free(packet);
 }
 
 ssp_packet_t* 
@@ -298,23 +332,23 @@ ssp_parse_payload(ssp_state_t* state, ssp_segbuff_t* segbuf,
     ssp_segmap_callback_t segmap_callback;
     bool segmap_called = false;
 
-	if (packet->header.flags & SSP_ZSTD_COMPRESSION_BIT)
+	if (packet->header->flags & SSP_ZSTD_COMPRESSION_BIT)
 	{
-		u32 og_size = ZSTD_getFrameContentSize(packet->payload, packet->header.size);
+		u32 og_size = ZSTD_getFrameContentSize(packet->payload, packet->payload_size);
 		payload = malloc(og_size);
-		u64 decompress_size = ZSTD_decompress(payload, og_size, packet->payload, packet->header.size);
+		u64 decompress_size = ZSTD_decompress(payload, og_size, packet->payload, packet->payload_size);
 		if (ZSTD_isError(decompress_size))
 		{
 			fprintf(stderr, "ZSTD_decompress FAILED: %s\n", ZSTD_getErrorName(decompress_size));
 			free(payload);
 			return SSP_FAILED;
 		}
-		printf("SSP Payload decompressed from: %u -> %zu (og: %u)\n", packet->header.size, decompress_size, og_size);
+		printf("SSP Payload decompressed from: %u -> %zu (og: %u)\n", packet->payload_size, decompress_size, og_size);
 	}
 	else
 		payload = (void*)packet->payload;
 
-	if (packet->header.flags & SSP_SESSION_BIT)
+	if (packet->header->flags & SSP_SESSION_BIT)
 	{
 		const u32 session_id = *(u32*)(payload + offset);
 
@@ -330,7 +364,7 @@ ssp_parse_payload(ssp_state_t* state, ssp_segbuff_t* segbuf,
 
 		offset += sizeof(u32);
 	}
-	if (packet->header.flags & SSP_SEQUENCE_COUNT_BIT)
+	if (packet->header->flags & SSP_SEQUENCE_COUNT_BIT)
 	{
 		if (segbuf)
 		{
@@ -348,7 +382,7 @@ ssp_parse_payload(ssp_state_t* state, ssp_segbuff_t* segbuf,
 		offset += sizeof(u16);
 	}
 
-    for (u32 i = 0; i < packet->header.segments; i++)
+    for (u32 i = 0; i < packet->header->segments; i++)
     {
         segment = (ssp_segment_t*)(payload + offset);
 
@@ -362,57 +396,87 @@ ssp_parse_payload(ssp_state_t* state, ssp_segbuff_t* segbuf,
 
         offset += segment->size + sizeof(ssp_segment_t);
     }
-	if (packet->header.flags & SSP_ZSTD_COMPRESSION_BIT)
+	if (packet->header->flags & SSP_ZSTD_COMPRESSION_BIT)
 		free(payload);
     return (segmap_called) ? ret : SSP_NOT_USED;
 }
 
-i32
-ssp_parse_buf(ssp_state_t* state, ssp_segbuff_t* segbuf, const void* buf, u64 buf_size, void* source_data)
+static void
+ssp_packet_get_payload(ssp_packet_t* packet)
 {
-    i32 ret;
-    const ssp_packet_t* packet = buf;
-    ssp_footer_t* footer = NULL;
-    u32 our_checksum;
-    u64 packet_size;
-    bool another_packet = false;
-
-	if (segbuf && segbuf->recv_incomplete.packet)
+	u32 offset = sizeof(ssp_header_t);
+	if (packet->header->flags & SSP_16_BIT_PAYLOAD_BIT)
 	{
-		memcpy((u8*)segbuf->recv_incomplete.packet + segbuf->recv_incomplete.current_size, buf, buf_size);
-		segbuf->recv_incomplete.current_size += buf_size;
-
-		if (segbuf->recv_incomplete.current_size < segbuf->recv_incomplete.packet_size)
-			return SSP_INCOMPLETE;
-
-		packet = segbuf->recv_incomplete.packet;
-		buf_size = segbuf->recv_incomplete.current_size;
-		segbuf->recv_incomplete.current_size = segbuf->recv_incomplete.packet_size = 0;
+		offset += sizeof(u16);
+		packet->payload_size = *(u16*)packet->header->size;
+	}
+	else
+	{
+		offset += sizeof(u8);
+		packet->payload_size = *(u8*)packet->header->size;
 	}
 
-    if (packet->header.magic != SSP_MAGIC)
-        return SSP_FAILED;
+	packet->payload = (u8*)packet->buf + offset;
+	packet->header_size = offset;
+	packet->size = packet->header_size + packet->payload_size;
+	
+	if (packet->header->flags & SSP_FOOTER_BIT)
+	{
+		packet->footer = (ssp_footer_t*)((u8*)packet->payload + packet->payload_size);
+		packet->size += sizeof(ssp_footer_t);
+	}
+}
 
-    packet_size = ssp_packet_size(packet);
-    if (packet_size > buf_size)
+i32
+ssp_parse_buf(ssp_state_t* state, ssp_segbuff_t* segbuf, const void* buf, u32 buf_size, void* source_data)
+{
+    i32 ret;
+    ssp_packet_t packet;
+    ssp_footer_t* footer = NULL;
+    u32 our_checksum;
+    bool another_packet = false;
+
+	if (segbuf && segbuf->recv_incomplete.packet.buf)
+	{
+		memcpy((u8*)segbuf->recv_incomplete.packet.buf + segbuf->recv_incomplete.current_size, buf, buf_size);
+		segbuf->recv_incomplete.current_size += buf_size;
+
+		if (segbuf->recv_incomplete.current_size < segbuf->recv_incomplete.packet.size)
+			return SSP_INCOMPLETE;
+
+		buf = segbuf->recv_incomplete.packet.buf;
+		buf_size = segbuf->recv_incomplete.current_size;
+		segbuf->recv_incomplete.current_size = segbuf->recv_incomplete.packet.size = 0;
+	}
+
+	memset(&packet, 0, sizeof(ssp_packet_t));
+	packet.buf = (void*)buf;
+	packet.header = packet.buf;
+
+    if (packet.header->magic != SSP_MAGIC)
+		return SSP_FAILED;
+
+	ssp_packet_get_payload(&packet);
+
+    if (packet.size > buf_size)
     {
 		if (segbuf)
 		{
-			segbuf->recv_incomplete.packet = calloc(1, packet_size);
-			memcpy(segbuf->recv_incomplete.packet, buf, buf_size);
-			segbuf->recv_incomplete.packet_size = packet_size;
+			segbuf->recv_incomplete.packet.buf = calloc(1, packet.size);
+			memcpy(segbuf->recv_incomplete.packet.buf, buf, buf_size);
+			segbuf->recv_incomplete.packet.size = packet.size;
 			segbuf->recv_incomplete.current_size = buf_size;
 		}
 		else
 			fprintf(stderr, "WARNING: ssp_parse_buf: segbuf is NULL and packet is incomplete!\n");
 		return SSP_INCOMPLETE;
 	}
-    else if (packet_size < buf_size)
+    else if (packet.size < buf_size)
         another_packet = true;
 
-    if ((footer = ssp_get_footer(packet)))
+    if ((footer = packet.footer))
     {
-        our_checksum = ssp_checksum32(packet, ssp_checksum_size(packet));
+        our_checksum = ssp_checksum32(packet.buf, ssp_checksum_size(&packet));
         if (our_checksum != footer->checksum)
 		{
 			printf("Corrupt packet. Checksum mismatch: 0x%X != 0x%X\n",
@@ -421,12 +485,12 @@ ssp_parse_buf(ssp_state_t* state, ssp_segbuff_t* segbuf, const void* buf, u64 bu
 		}
     }
 
-    ret = ssp_parse_payload(state, segbuf, packet, source_data);
+    ret = ssp_parse_payload(state, segbuf, &packet, source_data);
 
-	if (segbuf && segbuf->recv_incomplete.packet && segbuf->recv_incomplete.packet_size == 0)
+	if (segbuf && segbuf->recv_incomplete.packet.buf && segbuf->recv_incomplete.packet.size == 0)
 	{
-		free(segbuf->recv_incomplete.packet);
-		segbuf->recv_incomplete.packet = NULL;
+		free(segbuf->recv_incomplete.packet.buf);
+		memset(&segbuf->recv_incomplete.packet, 0, sizeof(ssp_packet_t));
 	}
 
     return (another_packet) ? SSP_MORE : ret;

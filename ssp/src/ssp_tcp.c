@@ -130,7 +130,7 @@ ssp_tcp_send_segbuf(ssp_tcp_sock_t* sock, ssp_segbuff_t* segbuf)
 		return -1;
 
 	ret = ssp_tcp_send(sock, packet);
-	free(packet);
+	ssp_packet_free(packet);
 
 	return ret;
 }
@@ -138,23 +138,11 @@ ssp_tcp_send_segbuf(ssp_tcp_sock_t* sock, ssp_segbuff_t* segbuf)
 i32 
 ssp_tcp_send(ssp_tcp_sock_t* sock, const ssp_packet_t* packet)
 {
+    i32 ret;
     if (packet == NULL)
         return -1;
 
-    i32 ret;
-    u8  add_footer = (packet->header.flags & SSP_FOOTER_BIT) != 0;
-    u32 packet_size = ssp_packet_size(packet);
-    ssp_footer_t* footer = ssp_get_footer(packet);
-
-    printf("Sending %u bytes (%u segments): [header: %zu, payload: %u, footer: %zu ",
-           packet_size, packet->header.segments, 
-           sizeof(ssp_header_t), packet->header.size, 
-           (sizeof(ssp_footer_t) * add_footer));
-    if (footer)
-        printf("[checksum: %X]", footer->checksum);
-    printf("]\n");
-
-    if ((ret = send(sock->sockfd, (void*)packet, packet_size, 0)) == -1)
+    if ((ret = send(sock->sockfd, packet->buf, packet->size, 0)) == -1)
         perror("send");
 
     return ret;

@@ -46,9 +46,8 @@ typedef struct
 	} compression;
 
 	struct {
-		ssp_packet_t* packet;
-		u64	packet_size;
-		u64 current_size;
+		ssp_packet_t packet;
+		u32 current_size;
 	} recv_incomplete;
 } ssp_segbuff_t;
 
@@ -79,25 +78,14 @@ void ssp_segmap(ssp_state_t* state, u16 segtype, ssp_segmap_callback_t callback)
 ssp_packet_t* ssp_new_packet(u32 size, u8 flags);
 
 /**
- *  Returns the pointer to the packet's footer.
- *  Returns NULL if packet has no footer.
- */
-ssp_footer_t* ssp_get_footer(const ssp_packet_t* packet);
-
-/**
  *  Calculate Packet Size based on payload size and flags.
  */
-u64 ssp_calc_psize(u32 payload_size, u8 footer);
-
-/**
- *  Get packet size. Header + Payload + footer (if it has footer)
- */
-u64 ssp_packet_size(const ssp_packet_t* packet);
+u32 ssp_calc_psize(u32 payload_size, u8 flags);
 
 /** 
  *  Segment size. Segment header + Segment's Data
  */
-u64 ssp_seg_size(const ssp_segment_t* seg);
+u32 ssp_seg_size(const ssp_segment_t* seg);
 
 /**
  * Serializes a packet from the `segbuf`.
@@ -108,6 +96,7 @@ u64 ssp_seg_size(const ssp_segment_t* seg);
  * If `segbuf->count` is zero, returns NULL.
  */
 ssp_packet_t* ssp_serialize_packet(ssp_segbuff_t* segbuf);
+void ssp_packet_free(ssp_packet_t* packet);
 
 ssp_packet_t* ssp_insta_packet(ssp_segbuff_t* source_segbuf, u16 type, const void* buf, u64 size);
 /**
@@ -145,6 +134,6 @@ void ssp_segbuff_destroy(ssp_segbuff_t* segbuf);
  *
  * `source_data` - Pointer to metadata containing information about the origin of the network buffer.
  */
-i32 ssp_parse_buf(ssp_state_t* state, ssp_segbuff_t* segbuf, const void* buf, u64 buf_size, void* source_data);
+i32 ssp_parse_buf(ssp_state_t* state, ssp_segbuff_t* segbuf, const void* buf, u32 buf_size, void* source_data);
 
 #endif // _SSP_H_
