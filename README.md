@@ -55,4 +55,5 @@ The footer contains the checksum of the packet. It is optional and is included i
 ```
 ## Limitations
 - Maximum payload size of 65,535 bytes (16-bit limit).
+- Supports up to 127 unique segment data types (7-bit limit).
 - Endianness-dependent.
