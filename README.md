@@ -53,7 +53,6 @@ The footer contains the checksum of the packet. It is optional and is included i
 ```
 [32-bit checksum]
 ```
-## Potential Future Enhancements
-- **Endianness:** Currently, the protocol assumes little-endian format. Future improvements could include support for different endianness to ensure compatibility across various systems.
-- **Dynamic Header:** Consider implementing a dynamic-sized header. For example, if the payload size is less than 256 bytes, use an 8-bit size field; for payloads larger than 255 bytes but less than 65,535 bytes, use a 16-bit size field; and for even larger payloads, use a 32-bit size field, etc.
-- **Additional Features:** As the protocol is still in its early stages and has not yet been deployed in a real application, there may be additional features or improvements that arise based on practical usage and requirements.
+## Limitations
+- Maximum payload size of 65,535 bytes (16-bit limit).
+- Endianness-dependent.
