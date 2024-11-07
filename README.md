@@ -13,7 +13,7 @@ Here's a high-level overview of a packet:
 ```
 ### Header Details:
 ```
-[ [32-bit magic][32-bit size][8-bit flags][8-bit segments] ]
+[ [32-bit magic][8-bit flags][8-bit segments][8-16-bit payload size] ]
 ```
 - `magic`: A unique identifier for the packet.
 - `size`: The size of the payload in bytes.
@@ -34,7 +34,7 @@ Here's a high-level overview of a packet:
 
 The payload is divided into _segments_ (after optional session id and sequence count), with each `segment` consisting of a type, size, and data:
 ```
-[ [16-bit type][32-bit size][data ...] ]
+[ [1-bit 16-bit size][7-bit type][8-16-bit size][data ...] ]
 ```
 - `type` The type of data contained in the segment.
 - `size` The size of the data in bytes.
@@ -42,7 +42,7 @@ The payload is divided into _segments_ (after optional session id and sequence c
 
 Detailed Payload View
 ```
-[ [16-bit type][32-bit size][data ...][16-bit type][32-bit size][data ...] ...  ]
+[ [32-bit session ID][16-bit sequence count] [8-bit type][8-16-bit size][data ...][8-bit type][8-16-bit size][data ...] ...  ]
 ```
 
 ### Footer Details
