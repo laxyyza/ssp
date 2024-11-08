@@ -109,6 +109,7 @@ void ssp_segbuff_init(ssp_segbuff_t* segbuf, u32 init_size, u8 flags);
  */
 void ssp_segbuff_add(ssp_segbuff_t* segbuf, u8 type, u16 size, const void* data);
 
+u32  ssp_segbuf_serialized_size(const ssp_segbuff_t* segbuf);
 /**
  * Clears the segbuff array.
  *

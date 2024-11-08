@@ -123,7 +123,7 @@ ssp_checksum32(const void* data, u64 size)
     return checksum;
 }
 
-static u32 
+u32 
 ssp_segbuf_serialized_size(const ssp_segbuff_t* segbuf)
 {
     u32 total = 0;
