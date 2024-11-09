@@ -37,7 +37,7 @@ typedef struct
     u32 inc_size;   // How much to increase by
 	u32 session_id;
 	u16 seqc_sent;
-	u16 seqc_recv;
+	u16 last_seqc_recv;
 	u8  flags;		// Packet Flags
 	struct {
 		bool auto_do;

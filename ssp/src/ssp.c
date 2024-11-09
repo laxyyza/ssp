@@ -393,13 +393,21 @@ ssp_parse_payload(ssp_state_t* state, ssp_segbuff_t* segbuf,
 		{
 			const u16 seqc_recv = *(u16*)(payload + offset);
 
-			if (segbuf->seqc_recv + 1 != seqc_recv)
+			if (segbuf->last_seqc_recv + 1 != seqc_recv)
 			{
-				printf("Packet seqc_recv: %u + 1 != %u. Packet loss?\n",
-						segbuf->seqc_recv, seqc_recv);
+				if (seqc_recv > segbuf->last_seqc_recv + 1)
+				{
+					printf("SSP: Possible packet loss. last_seqc_recv: %u < new seqc: %u. ~%d packets possibly lost.\n",
+							segbuf->last_seqc_recv, seqc_recv, seqc_recv - (segbuf->last_seqc_recv + 1));
+				}
+				else if (seqc_recv < segbuf->last_seqc_recv + 1)
+				{
+					printf("SSP: Out-of-order packet. last_seqc_recv: %u > new seqc: %u.\n", 
+							segbuf->last_seqc_recv, seqc_recv);
+				}
 			}
 
-			segbuf->seqc_recv = seqc_recv;
+			segbuf->last_seqc_recv = seqc_recv;
 		}
 
 		offset += sizeof(u16);
