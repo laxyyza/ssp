@@ -64,7 +64,7 @@ ssp_set_header_payload_size(ssp_packet_t* packet, u32 payload_size)
 
 	if (packet->header->flags & SSP_16_BIT_PAYLOAD_BIT)
 	{
-		*(u16*)packet->header->size = (u16)payload_size;
+		memcpy(packet->header->size, &payload_size, sizeof(u16));
 		header_size += sizeof(u16);
 	}
 	else
@@ -453,7 +453,7 @@ ssp_packet_get_payload(ssp_packet_t* packet)
 	if (packet->header->flags & SSP_16_BIT_PAYLOAD_BIT)
 	{
 		offset += sizeof(u16);
-		packet->payload_size = *(u16*)packet->header->size;
+		memcpy(&packet->payload_size, packet->header->size, sizeof(u16));
 	}
 	else
 	{
