@@ -66,6 +66,8 @@ typedef struct
     ght_t segment_map;      // Segment Map (Segment Type Function-pointer map)
 	ssp_session_verify_callback_t verify_session;
     void* user_data;
+	bool debug;
+	const char* (*segment_type_str)(u8 type);
 } ssp_state_t;
 
 void ssp_state_init(ssp_state_t* state);

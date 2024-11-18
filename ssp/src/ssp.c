@@ -146,6 +146,146 @@ ssp_segbuf_serialized_size(const ssp_segbuff_t* segbuf)
     return total;
 }
 
+static void 
+ssp_bytes_name(const u8* buf, u32 count, u32 tab_count, const char* name)
+{
+	if (tab_count == 0)
+		tab_count = 1;
+
+	printf("\t\t");
+
+	for (u32 i = 0; i < count; i++)
+		printf("%.2X ", buf[i]);
+
+	for (u32 i = 0; i < tab_count; i++)
+		printf("\t");
+
+	if (count == sizeof(u8))
+		printf("(%u)", *buf);
+	else if (count == sizeof(u16))
+		printf("(%u)", *(u16*)buf);
+	else if (count == sizeof(u32))
+		printf("(%u)", *(u32*)buf);
+
+	for (u32 i = 0; i < tab_count; i++)
+		printf("\t");
+
+	printf("%s\n", name);
+}
+
+void
+ssp_print_packet(ssp_state_t* state, const ssp_packet_t* packet, const u8* payload)
+{
+	const u8* buf = packet->buf;
+	u32 offset = 0;
+	u32 payload_size;
+
+	printf("\n---[SSP Packet. Size: %u, Payload: %u]---\n{\n\t", 
+		packet->size, packet->payload_size);
+
+	printf("-[SSP Header]-\n\t{\n");
+	ssp_bytes_name(buf + offset, sizeof(u32), 1, "SSP_MAGIC");
+	offset += sizeof(u32);
+
+#define FLAGS_NAME_LEN 256
+#define SEGMENT_DATA_MAX 16
+
+	char flags_name[FLAGS_NAME_LEN] = "FLAGS (";
+	if (packet->header->flags & SSP_FOOTER_BIT)
+		strcat(flags_name, "SSP_FOOTER_BIT | ");
+	if (packet->header->flags & SSP_SESSION_BIT)
+		strcat(flags_name, "SSP_SESSION_BIT | ");
+	if (packet->header->flags & SSP_SEQUENCE_COUNT_BIT)
+		strcat(flags_name, "SSP_SEQUENCE_COUNT_BIT | ");
+	if (packet->header->flags & SSP_ZSTD_COMPRESSION_BIT)
+		strcat(flags_name, "SSP_ZSTD_COMPRESSION_BIT | ");
+	if (packet->header->flags & SSP_16_BIT_PAYLOAD_BIT)
+		strcat(flags_name, "SSP_16_BIT_PAYLOAD_BIT | ");
+
+	flags_name[strlen(flags_name) - 3] = 0x00;
+
+	strcat(flags_name, ")");
+
+	ssp_bytes_name(buf + offset, sizeof(u8), 2, flags_name);
+	offset += sizeof(u8);
+	ssp_bytes_name(buf + offset, sizeof(u8), 2, "SEGMENT_COUNT");
+	offset += sizeof(u8);
+
+	if (packet->header->flags & SSP_16_BIT_PAYLOAD_BIT)
+		payload_size = sizeof(u16);
+	else
+		payload_size = sizeof(u8);
+
+	ssp_bytes_name(buf + offset, payload_size, 2, "PAYLOAD_SIZE");
+	offset = 0;
+	buf = payload;
+
+	printf("\t}\n\t-[SSP Payload]-\n\t}\n");
+	if (packet->header->flags & SSP_SESSION_BIT)
+	{
+		ssp_bytes_name(buf + offset, sizeof(u32), 1, "SSP_SESSION_BIT");
+		offset += sizeof(u32);
+	}
+	if (packet->header->flags & SSP_SEQUENCE_COUNT_BIT)
+	{
+		ssp_bytes_name(buf + offset, sizeof(u16), 2, "SSP_SEQUENCE_COUNT_BIT");
+		offset += sizeof(u16);
+	}
+
+	for (u32 i = 0; i < packet->header->segments; i++)
+	{
+		printf("\t\t-[SSP Segment %u]-\n\t\t{\n\t", i);
+		u8 segment_type = buf[offset];
+		u32 segment_payload_size;
+		u32 segment_size;
+		bool _16bit_size = false;
+
+		char segment_type_str[FLAGS_NAME_LEN];
+		snprintf(segment_type_str, FLAGS_NAME_LEN, "TYPE \"%s\"", (state->segment_type_str) ? state->segment_type_str(segment_type) : "");
+
+		if (segment_type & SSP_SEGMENT_16BIT_PAYLOAD)
+		{
+			strcat(segment_type_str, " (SSP_SEGMENT_16BIT_PAYLOAD)");
+			((u8*)buf)[offset] ^= SSP_SEGMENT_16BIT_PAYLOAD;
+			_16bit_size = true;
+		}
+
+		ssp_bytes_name(buf + offset, sizeof(u8), 1, segment_type_str);
+		offset += sizeof(u8);
+
+		if (_16bit_size)
+		{
+			segment_payload_size = sizeof(u16);
+			((u8*)buf)[offset - 1] ^= SSP_SEGMENT_16BIT_PAYLOAD;
+			segment_size = *(u16*)(buf + offset);
+		}
+		else
+		{
+			segment_payload_size = sizeof(u8);
+			segment_size = *(buf + offset);
+		}
+
+		printf("\t");
+		ssp_bytes_name(buf + offset, segment_payload_size, 1, "SEGMENT_SIZE");
+		offset += segment_payload_size;
+
+		printf("\t\t\t[ ");
+		for (u32 j = 0; j < ((segment_size > SEGMENT_DATA_MAX) ? SEGMENT_DATA_MAX : segment_size); j++)
+		{
+			printf("%.2X ", payload[offset + j]);
+		}
+		if (segment_size > SEGMENT_DATA_MAX)
+			printf("... ");
+		printf("]\n");
+
+		offset += segment_size;
+
+		printf("\t\t}\n");
+	}
+
+	printf("\t}\n}\n");
+}
+
 static void
 ssp_serialize(ssp_packet_t* packet, ssp_segbuff_t* segbuf)
 {
@@ -370,6 +510,9 @@ ssp_parse_payload(ssp_state_t* state, ssp_segbuff_t* segbuf,
 	}
 	else
 		payload = (void*)packet->payload;
+
+	if (state->debug)
+		ssp_print_packet(state, packet, payload);
 
 	if (packet->header->flags & SSP_SESSION_BIT)
 	{
