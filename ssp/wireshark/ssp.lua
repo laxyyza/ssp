@@ -89,7 +89,7 @@ function ssp_proto.dissector(buffer, pinfo, tree)
         payload_offset = payload_offset + 2
     end
 
-	local payload_tree = subtree:add("Payload", buffer(actual_payload_offset, payload_size))
+	local payload_tree = subtree:add("Payload: Segments", buffer(actual_payload_offset, payload_size))
 
     -- Parse segments
     local remaining_payload_size = payload_size
