@@ -1,7 +1,6 @@
 #include "ssp_tcp.h"
 #include <stdio.h>
 
-
 i32 
 ssp_tcp_sock_create(ssp_tcp_sock_t* sock, enum ssp_sockdomain ssp_domain)
 {
@@ -117,7 +116,7 @@ ssp_tcp_sock_close(ssp_tcp_sock_t* sock)
 }
 
 i32 
-ssp_tcp_send_segbuf(ssp_tcp_sock_t* sock, ssp_segbuff_t* segbuf)
+ssp_tcp_send_segbuf(ssp_tcp_sock_t* sock, ssp_segbuf_t* segbuf)
 {
 	if (segbuf == NULL)
 		return -1;
