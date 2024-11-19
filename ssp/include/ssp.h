@@ -139,4 +139,6 @@ void ssp_segbuff_destroy(ssp_segbuff_t* segbuf);
  */
 i32 ssp_parse_buf(ssp_state_t* state, ssp_segbuff_t* segbuf, const void* buf, u32 buf_size, void* source_data);
 
+void ssp_print_packet(ssp_state_t* state, const ssp_packet_t* packet, const u8* payload);
+
 #endif // _SSP_H_

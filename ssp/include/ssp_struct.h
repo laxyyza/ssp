@@ -6,7 +6,7 @@
 /**
  * Packet Structure
  *
- *  Header: It includes the first magic identifier, payload size and segment count
+ *  Header: It includes the first magic identifier, flags, segment count and payload size.
  *
  *  Payload: Just an array of segments
  *
@@ -21,22 +21,22 @@
  *  [ [header] [payload: {segment0, segment1, ...}] [footer] ]
  *
  *  [ 
- *      [ header ] 10 bytes
- *          u32 magic
- *          u8  flags
- *          u8  segments
- *          u8-16 payload_size
+ *      [ header ] 7-14 bytes
+ *          u32   magic
+ *          u8    flags
+ *          u8	  segment_count
+ *          u8-16 payload_size		(SSP_16_BIT_PAYLOAD_BIT for u16)
+ *          u32 session_id			(optional SSP_SESSION_BIT)
+ *          u16 sequence_count		(optional SSP_SEQUENCE_COUNT_BIT)
  *
- *      [ payload: {  6-UINT32_MAX bytes
- *          session_id (optional SSP_SESSION_BIT)
- *          sequence count (optional SSP_SEQUENCE_COUNT_BIT)
- *          segment0, 6+ bytes
- *              u16 type
- *              u32 size
+ *      [ payload: {  2-UINT16_MAX bytes
+ *          segment0, 2+ bytes
+ *              u8 type
+ *              u8-16 size
  *              u8 data[]
  *          segment1, 
- *              u16 type
- *              u32 size
+ *              u8 type
+ *              u8-16 size
  *              u8 data[]
  *          ...
  *      }] 
@@ -58,25 +58,28 @@
 /**
  * Header structure:
  *
- * [32-bit magic][8-bit flags][8-bit segment count][8-16-bit payload size]
+ * [32-bit magic] [8-bit flags] [8-bit segment count] [8-16-bit payload size]
+ *	  [32-bit session id (opt)] [16-bit sequence count (opt)]
  *
  *  flags bits:
- *     [0 1 2 3 4 5 6 7]
- *      F S Q Z P R R R
+ *  MSB [7 6 5 4 3 2 1 0] LSB
+ *		 F S Q Z P R R R
  *      
- *      F (0)	- Footer
- *      S (1)	- Session id
- *      Q (2)	- seQuence count 
- *      Z (3)	- Zstd packet compression.
- *      P (4)	- 16-bit Payload size.
- *      R (5-7) - Reserve
+ *      F (7)	- Footer
+ *      S (6)	- Session id
+ *      Q (5)	- seQuence count 
+ *      Z (4)	- Zstd packet compression.
+ *      P (3)	- 16-bit Payload size.
+ *      R (2-0) - Reserve
  */
 typedef struct ssp_header
 {
-    u32 magic;      // Magic u32
-    u8 flags;       // flags
-    u8 segments;    // Segment count
-    u8 size[];      // Payload Size
+    u32 magic;			// Magic ID
+    u8 flags;			// flag bits
+    u8 segment_count;
+    u8 payload_size[];
+	// optional u32 session ID
+	// optional u16 sequence count
 } _SSP_PACKED ssp_header_t;
 
 /**

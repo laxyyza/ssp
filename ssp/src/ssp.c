@@ -64,12 +64,12 @@ ssp_set_header_payload_size(ssp_packet_t* packet, u32 payload_size)
 
 	if (packet->header->flags & SSP_16_BIT_PAYLOAD_BIT)
 	{
-		memcpy(packet->header->size, &payload_size, sizeof(u16));
+		memcpy(packet->header->payload_size, &payload_size, sizeof(u16));
 		header_size += sizeof(u16);
 	}
 	else
 	{
-		packet->header->size[0] = (u8)payload_size;
+		packet->header->payload_size[0] = (u8)payload_size;
 		header_size += sizeof(u8);
 	}
 	packet->size = header_size + payload_size + footer_size;
@@ -232,7 +232,7 @@ ssp_print_packet(ssp_state_t* state, const ssp_packet_t* packet, const u8* paylo
 		offset += sizeof(u16);
 	}
 
-	for (u32 i = 0; i < packet->header->segments; i++)
+	for (u32 i = 0; i < packet->header->segment_count; i++)
 	{
 		printf("\t\t-[SSP Segment %u]-\n\t\t{\n\t", i);
 		u8 segment_type = buf[offset];
@@ -291,7 +291,7 @@ ssp_serialize(ssp_packet_t* packet, ssp_segbuff_t* segbuf)
 {
     u32 offset = 0;
 	void* payload;
-    packet->header->segments = segbuf->count;
+    packet->header->segment_count = segbuf->count;
 
 	if (packet->header->flags & SSP_ZSTD_COMPRESSION_BIT || 
 		(segbuf->compression.auto_do && packet->payload_size > segbuf->compression.threshold))
@@ -556,7 +556,7 @@ ssp_parse_payload(ssp_state_t* state, ssp_segbuff_t* segbuf,
 		offset += sizeof(u16);
 	}
 
-    for (u32 i = 0; i < packet->header->segments; i++)
+    for (u32 i = 0; i < packet->header->segment_count; i++)
     {
 		ssp_segment_t segment;
         u8* segment_buf = (u8*)(payload + offset);
@@ -596,12 +596,12 @@ ssp_packet_get_payload(ssp_packet_t* packet)
 	if (packet->header->flags & SSP_16_BIT_PAYLOAD_BIT)
 	{
 		offset += sizeof(u16);
-		memcpy(&packet->payload_size, packet->header->size, sizeof(u16));
+		memcpy(&packet->payload_size, packet->header->payload_size, sizeof(u16));
 	}
 	else
 	{
 		offset += sizeof(u8);
-		packet->payload_size = *(u8*)packet->header->size;
+		packet->payload_size = *(u8*)packet->header->payload_size;
 	}
 
 	packet->payload = (u8*)packet->buf + offset;
