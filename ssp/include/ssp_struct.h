@@ -54,23 +54,28 @@
 #define SSP_SEQUENCE_COUNT_BIT		0x20
 #define SSP_ZSTD_COMPRESSION_BIT	0x10
 #define SSP_16_BIT_PAYLOAD_BIT		0x08
+#define SSP_IMPORTANT_BIT			0x04
+#define SSP_ACK_BIT					0x02
 
 /**
  * Header structure:
  *
  * [32-bit magic] [8-bit flags] [8-bit segment count] [8-16-bit payload size]
- *	  [32-bit session id (opt)] [16-bit sequence count (opt)]
+ *	  [32-bit session id (opt)] [16-bit sequence count | 16-bit ack (opt)]
  *
  *  flags bits:
  *  MSB [7 6 5 4 3 2 1 0] LSB
- *		 F S Q Z P R R R
+ *		 F S Q Z P I A R
  *      
  *      F (7)	- Footer
  *      S (6)	- Session id
  *      Q (5)	- seQuence count 
  *      Z (4)	- Zstd packet compression.
  *      P (3)	- 16-bit Payload size.
- *      R (2-0) - Reserve
+ *      I (2)	- Important
+ *      A (1)	- ACK
+ *
+ *      R (0) - Reserve
  */
 typedef struct ssp_header
 {
@@ -80,6 +85,7 @@ typedef struct ssp_header
     u8 payload_size[];
 	// optional u32 session ID
 	// optional u16 sequence count
+	// optional u16 ACK
 } _SSP_PACKED ssp_header_t;
 
 /**
@@ -123,6 +129,12 @@ typedef struct ssp_packet
 	void*			payload;
 	// This will point to where the footer is in `void* buf`
 	ssp_footer_t*	footer;
+
+	u16 sequence_count;
+	u32 retries;
+	bool last_retry;
+
+	f64 timestamp;
 } ssp_packet_t;
 
 #endif // _SSP_STRUCT_H_

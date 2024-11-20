@@ -2,6 +2,8 @@
 #define _SSP_H_
 #include "ssp_struct.h"
 #include <ght.h>
+#include <array.h>
+#include "ssp_ring.h"
 
 #define _SSP_UNUSED __attribute__((unused))
 #define SSP_SUCCESS 0
@@ -16,6 +18,7 @@ typedef struct
     u8 type;
     u16 size;
     const void* data;
+	bool important;
 } ssp_data_ref_t;
 
 /**
@@ -50,6 +53,11 @@ typedef struct
 		ssp_packet_t packet;
 		u32 current_size;
 	} recv_incomplete;
+
+	f32 retry_interval_ms;
+	u32 max_retries;
+	array_t important_packets;
+	ssp_ringi16_t acks;
 } ssp_segbuf_t;
 
 typedef void (*ssp_segment_callback_t)(const ssp_segment_t*, void* user_data, void* source_data);
@@ -131,7 +139,12 @@ void ssp_segbuf_init(ssp_segbuf_t* segbuf, u32 init_size, u8 flags);
  *  NOTE: The data must remain valid (i.e., not freed, or go out of scope) 
  *        from the time it is added to the buffer until the call to `ssp_serialize_packet()`.
  */
-void ssp_segbuf_add(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data);
+ssp_data_ref_t* ssp_segbuf_add(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data);
+
+/**
+ *	'i' for "Important"
+ */
+void ssp_segbuf_add_i(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data);
 
 /**
  *	Calculate the total size of segbuf if serialized.
@@ -166,5 +179,7 @@ void ssp_segbuf_destroy(ssp_segbuf_t* segbuf);
 i32 ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, const void* buf, u32 buf_size, void* source_data);
 
 void ssp_print_packet(ssp_ctx_t* ctx, const ssp_packet_t* packet, const u8* payload);
+ssp_packet_t* ssp_segbuf_get_resend_packet(ssp_segbuf_t* segbuf, f64 current_time);
+void ssp_segbuf_set_rtt(ssp_segbuf_t* segbuf, f32 rtt_ms);
 
 #endif // _SSP_H_

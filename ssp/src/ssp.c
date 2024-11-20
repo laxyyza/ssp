@@ -1,7 +1,12 @@
+#define _GNU_SOURCE
 #include "ssp.h"
 #include <string.h>
 #include <stdio.h>
 #include <zstd.h>
+#include <time.h>
+
+#define SSP_MAX_ACKS 8
+#define RESEND_SAFETY_MARGIN_MS 50
 
 static u32 ssp_magic = SSP_MAGIC;
 
@@ -52,6 +57,8 @@ ssp_calc_psize(u32 payload_size, u8 flags)
 		packet_size += sizeof(u32);	// +4 bytes
 	if (flags & SSP_SEQUENCE_COUNT_BIT)
 		packet_size += sizeof(u16);	// +2 bytes
+	if (flags & SSP_ACK_BIT)
+		packet_size += sizeof(u16); // +2 bytes
 
 	packet_size += header_size;
 
@@ -95,7 +102,7 @@ ssp_new_packet(u32 size, u8 flags)
 
 	packet_size = ssp_calc_psize(size, flags);
 
-	packet = malloc(sizeof(ssp_packet_t));
+	packet = calloc(1, sizeof(ssp_packet_t));
     packet->buf = calloc(1, packet_size);
 	packet->header = packet->buf;
     packet->header->magic = ssp_magic;
@@ -139,6 +146,8 @@ ssp_segbuf_serialized_size(const ssp_segbuf_t* segbuf)
 	if (segbuf->flags & SSP_SESSION_BIT)
 		total += sizeof(u32);
 	if (segbuf->flags & SSP_SEQUENCE_COUNT_BIT)
+		total += sizeof(u16);
+	if (segbuf->flags & SSP_ACK_BIT || segbuf->acks.count)
 		total += sizeof(u16);
 
     for (u32 i = 0; i < segbuf->count; i++)
@@ -298,6 +307,7 @@ static void
 ssp_serialize(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 {
     u32 offset = 0;
+	u16 ack;
 	void* payload;
     packet->header->segment_count = segbuf->count;
 
@@ -318,7 +328,14 @@ ssp_serialize(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 	if (segbuf->flags & SSP_SEQUENCE_COUNT_BIT)
 	{
 		segbuf->seqc_sent++;
+		packet->sequence_count = segbuf->seqc_sent;
 		memcpy(payload + offset, &segbuf->seqc_sent, sizeof(u16));
+		offset += sizeof(u16);
+	}
+	if (ssp_ringi16_read(&segbuf->acks, &ack))
+	{
+		memcpy((u8*)payload + offset, &ack, sizeof(u16));
+		packet->header->flags |= SSP_ACK_BIT;
 		offset += sizeof(u16);
 	}
 
@@ -348,6 +365,10 @@ ssp_serialize(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 
 		// Copy data
 		memcpy(segment + segment_offset, data_ref->data, data_ref->size);
+
+		// Set packet as important if at least one segment is important.
+		if (data_ref->important)
+			packet->header->flags |= SSP_IMPORTANT_BIT;
 
         offset += segment_offset + data_ref->size;
     }
@@ -383,7 +404,7 @@ ssp_serialize_packet(ssp_segbuf_t* segbuf)
     ssp_packet_t* packet;
     u32 payload_size;
 
-    if (segbuf->count == 0)
+	if (segbuf->count == 0 && segbuf->acks.count == 0)
         return NULL;
 
     payload_size = ssp_segbuf_serialized_size(segbuf);
@@ -396,6 +417,9 @@ ssp_serialize_packet(ssp_segbuf_t* segbuf)
 
     ssp_segbuf_clear(segbuf);
 
+	if (packet->header->flags & SSP_IMPORTANT_BIT)
+		array_add_voidp(&segbuf->important_packets, packet);
+
     return packet;
 }
 
@@ -403,6 +427,9 @@ void
 ssp_packet_free(ssp_packet_t* packet)
 {
 	if (packet == NULL)
+		return;
+
+	if (packet->header->flags & SSP_IMPORTANT_BIT && packet->last_retry == false)
 		return;
 
 	free(packet->buf);
@@ -443,6 +470,11 @@ ssp_segbuf_init(ssp_segbuf_t* segbuf, u32 init_size, u8 flags)
     segbuf->min_size = init_size;
     segbuf->inc_size = init_size;
 	segbuf->flags = flags;
+	segbuf->retry_interval_ms = 300.0;
+	segbuf->max_retries = 3;
+
+	ssp_ringi16_init(&segbuf->acks, SSP_MAX_ACKS);
+	array_init(&segbuf->important_packets, sizeof(ssp_packet_t**), SSP_MAX_ACKS);
 }
 
 void 
@@ -457,24 +489,36 @@ ssp_segbuf_resize(ssp_segbuf_t* segbuf, u32 new_size)
     segbuf->size = new_size;
 }
 
-void    
+ssp_data_ref_t*
 ssp_segbuf_add(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data)
 {
     for (u32 i = 0; i < segbuf->count; i++)
 	{
         const ssp_data_ref_t* data_ref = segbuf->data_refs + i;
 		if (data_ref->data == data && data_ref->size == size)
-			return; // Dont duplicate data.
+			return NULL; // Dont duplicate data.
 	}
 
     ssp_data_ref_t* data_ref = segbuf->data_refs + segbuf->count;
     data_ref->type = type;
     data_ref->size = size;
     data_ref->data = data;
+	data_ref->important = false;
     segbuf->count++;
 
-    if (segbuf->count >= segbuf->size)
+	if (segbuf->count >= segbuf->size)
         ssp_segbuf_resize(segbuf, segbuf->size + segbuf->inc_size);
+
+	return data_ref;
+}
+
+void 
+ssp_segbuf_add_i(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data)
+{
+	ssp_data_ref_t* data_ref;
+
+	if ((data_ref = ssp_segbuf_add(segbuf, type, size, data)))
+		data_ref->important = true;
 }
 
 void 
@@ -491,6 +535,8 @@ void
 ssp_segbuf_destroy(ssp_segbuf_t* segbuf)
 {
 	free(segbuf->data_refs);
+	array_del(&segbuf->important_packets);
+	ssp_ringi16_free(&segbuf->acks);
 }
 
 static i32
@@ -538,6 +584,7 @@ ssp_parse_payload(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf,
 
 		offset += sizeof(u32);
 	}
+
 	if (packet->header->flags & SSP_SEQUENCE_COUNT_BIT)
 	{
 		if (segbuf)
@@ -558,8 +605,45 @@ ssp_parse_payload(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf,
 				}
 			}
 
+			if (packet->header->flags & SSP_IMPORTANT_BIT)
+			{
+				if (seqc_recv == segbuf->last_seqc_recv)
+				{
+					printf("Dup import packet. Ignoring.\n");
+					return SSP_NOT_USED;
+				}
+
+				ssp_ringi16_write(&segbuf->acks, seqc_recv);
+			}
+
 			segbuf->last_seqc_recv = seqc_recv;
 		}
+
+		offset += sizeof(u16);
+	}
+	
+	if (packet->header->flags & SSP_ACK_BIT)
+	{
+		if (segbuf)
+		{
+			u16 ack;
+			memcpy(&ack, payload + offset, sizeof(u16));
+			
+			for (u32 i = 0; i < segbuf->important_packets.count; i++)
+			{
+				ssp_packet_t* imp_packet = ((ssp_packet_t**)segbuf->important_packets.buf)[i];
+
+				if (ack == imp_packet->sequence_count)
+				{
+					imp_packet->header->flags ^= SSP_IMPORTANT_BIT;
+					ssp_packet_free(imp_packet);
+					array_erase(&segbuf->important_packets, i);
+					break;
+				}
+			}
+		}
+		else
+			printf("ssp: SSP_ACK_BIT but no segbuf...\n");
 
 		offset += sizeof(u16);
 	}
@@ -594,6 +678,7 @@ ssp_parse_payload(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf,
     }
 	if (packet->header->flags & SSP_ZSTD_COMPRESSION_BIT)
 		free(payload);
+
     return (segment_called) ? ret : SSP_NOT_USED;
 }
 
@@ -690,4 +775,38 @@ ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, const void* buf, u32 buf_siz
 	}
 
     return (another_packet) ? SSP_MORE : ret;
+}
+
+ssp_packet_t* 
+ssp_segbuf_get_resend_packet(ssp_segbuf_t* segbuf, f64 current_time)
+{
+	for (u32 i = 0; i < segbuf->important_packets.count; i++)
+	{
+		ssp_packet_t* imp_packet = ((ssp_packet_t**)segbuf->important_packets.buf)[i];
+		f32 elapsed_time_ms = (current_time - imp_packet->timestamp) * 1000;
+
+		if (elapsed_time_ms >= segbuf->retry_interval_ms)
+		{
+			imp_packet->timestamp = current_time;
+			imp_packet->retries++;
+
+			if (imp_packet->retries >= segbuf->max_retries)
+			{
+				imp_packet->last_retry = true;
+				array_erase(&segbuf->important_packets, i);
+			}
+
+			return imp_packet;
+		}
+	}
+	return NULL;
+}
+
+void
+ssp_segbuf_set_rtt(ssp_segbuf_t* segbuf, f32 rtt_ms)
+{
+	f32 new_interval = rtt_ms + RESEND_SAFETY_MARGIN_MS;
+
+	if (new_interval >= RESEND_SAFETY_MARGIN_MS)
+		segbuf->retry_interval_ms = new_interval;
 }
