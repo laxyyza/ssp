@@ -1,5 +1,4 @@
-# SSP - Simple Segmented Protocol
-SSP is a dynamic, application-level binary protocol designed to work over both TCP and UDP. Its payload is divided into 'segments,' allowing multiple types of data to be transmitted within a single packet. For example, a single game packet could include a player's position, input, events, and more.
+# SSP - Simple Segmented Protocol SSP is a dynamic, application-level binary protocol designed to work over both TCP and UDP. Its payload is divided into 'segments,' allowing multiple types of data to be transmitted within a single packet. For example, a single game packet could include a player's position, input, events, and more.
 
 This project encompasses the protocol's structure, its implementation, and a C-based network library. The library is designed to buffer multiple data segments before serializing them into a single packet for transmission.
 
@@ -21,13 +20,13 @@ Here's a high-level overview of a packet:
    MSB [7 6 5 4 3 2 1 0] LSB
         F S Q Z P R R R
 ```
-- Flag Details:
-    - (F) Footer: Indicates the presence of a 32-bit checksum for the packet.
-    - (S) Session ID: Includes a 32-bit session ID (useful for UDP).
-    - (Q) Sequence Count: Includes a 16-bit sequence count for tracking packet order.
-    - (Z) Zstd Compression: Indicates that the payload is compressed using Zstd.
-    - (P) 16-bit Payload Size: Specifies that the payload size uses 16 bits instead of the default 8 bits.
-    - (R) Reserved: Bits reserved for future use.
+- **Flag Details:**
+    - **(F) Footer:** Indicates the presence of a 32-bit checksum for the packet.
+    - **(S) Session ID:** Includes a 32-bit session ID (useful for UDP).
+    - **(Q) Sequence Count:** Includes a 16-bit sequence count for tracking packet order.
+    - **(Z) Zstd Compression:** Indicates that the payload is compressed using Zstd.
+    - **(P) 16-bit Payload Size:** Specifies that the payload size uses 16 bits instead of the default 8 bits.
+    - **(R) Reserved:** Bits reserved for future use.
 #### Example
 A header with the `F`, `S`, and `P` flags set would include a footer checksum, session ID, and a 16-bit payload size field. The structure dynamically adjusts based on the flags, allowing flexible and efficient packet formatting.
 
