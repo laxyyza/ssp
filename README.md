@@ -21,7 +21,7 @@ The packet consists of three main components: header, payload (which contains se
 - `flags`: A set of options for the packet, represented by the following bits:
 ```
    MSB [7 6 5 4 3 2 1 0] LSB
-        F S Q Z P R R R
+        F S Q Z P I A R
 ```
 - **Flag Details:**
     - **(F) Footer:** Indicates the presence of a 32-bit checksum for the packet.
@@ -30,6 +30,8 @@ The packet consists of three main components: header, payload (which contains se
     - **(Q) Sequence Count:** Includes a 16-bit sequence count for tracking packet order.
     - **(Z) Zstd Compression:** Indicates that the payload is compressed using Zstandard.
     - **(P) 16-bit Payload Size:** Specifies that the payload size uses 16 bits instead of the default 8 bits.
+    - **(I) Important:** (Depends on the `Q` flag) Marks the packet as 'important'; the receiver must send an acknowledgment (ACK).
+    - **(A) ACK:** Acknowledgment packet containing the sequence count.
     - **(R) Reserved:** Bits reserved for future use.
 #### Example
 A header with the `F`, `S`, and `P` flags set would include a footer checksum, session ID, and a 16-bit payload size field. The structure dynamically adjusts based on the flags, allowing flexible and efficient packet formatting.
