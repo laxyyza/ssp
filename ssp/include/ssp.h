@@ -84,6 +84,8 @@ void ssp_ctx_destroy(ssp_ctx_t* ctx);
  */
 void ssp_segment_callback(ssp_ctx_t* ctx, u16 segtype, ssp_segment_callback_t callback);
 
+u32 ssp_checksum32(const void* data, u64 size);
+
 /**
  *  Allocate new ssp_packet_t with it's payload size.
  */
