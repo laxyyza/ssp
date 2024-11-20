@@ -3,10 +3,18 @@
 #include <stdio.h>
 #include <zstd.h>
 
+static u32 ssp_magic = SSP_MAGIC;
+
 void 
 ssp_ctx_init(ssp_ctx_t* ctx)
 {
     ght_init(&ctx->segment_callbacks, 10, NULL);
+}
+
+void 
+ssp_set_magic(u32 magic)
+{
+	ssp_magic = magic;
 }
 
 void 
@@ -90,7 +98,7 @@ ssp_new_packet(u32 size, u8 flags)
 	packet = malloc(sizeof(ssp_packet_t));
     packet->buf = calloc(1, packet_size);
 	packet->header = packet->buf;
-    packet->header->magic = SSP_MAGIC;
+    packet->header->magic = ssp_magic;
     packet->header->flags = flags;
 	ssp_set_header_payload_size(packet, size);
 
@@ -641,7 +649,7 @@ ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, const void* buf, u32 buf_siz
 	packet.buf = (void*)buf;
 	packet.header = packet.buf;
 
-    if (packet.header->magic != SSP_MAGIC)
+    if (packet.header->magic != ssp_magic)
 		return SSP_FAILED;
 
 	ssp_packet_get_payload(&packet);

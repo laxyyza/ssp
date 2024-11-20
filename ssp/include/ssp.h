@@ -71,6 +71,12 @@ typedef struct
 } ssp_ctx_t;
 
 void ssp_ctx_init(ssp_ctx_t* ctx);
+
+/**
+ *	Set a custom magic number for SSP, replacing the default `SSP_MAGIC`.
+ */
+void ssp_set_magic(u32 magic);
+
 void ssp_ctx_destroy(ssp_ctx_t* ctx);
 
 /**
