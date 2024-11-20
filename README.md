@@ -9,6 +9,7 @@ The packet consists of three main components: header, payload (which contains se
 ```
 [ [ header ] [ payload: {segment0, segment1, ...} ] [ footer (optional) ] ]
 ```
+![image](https://github.com/user-attachments/assets/e3b05edd-3cb6-486a-abea-cd8af12fabf3)
 ### Header Details:
 ```
 [32-bit magic] [8-bit flags] [8-bit segment_count] [8-16-bit payload_size]
