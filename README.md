@@ -5,7 +5,7 @@ SSP is a dynamic, application-level binary protocol designed to work over both T
 This project encompasses the protocol's structure, its implementation, and a C-based network library. The library is designed to buffer multiple data segments before serializing them into a single packet for transmission.
 
 ## Protocol Structure
-Here's a high-level overview of a packet:
+The packet consists of three main components: header, payload (which contains segments), and an optional footer:
 ```
 [ [ header ] [ payload: {segment0, segment1, ...} ] [ footer (optional) ] ]
 ```
@@ -27,14 +27,14 @@ Here's a high-level overview of a packet:
     - **(S) Session ID:** Includes a 32-bit session ID (useful for UDP).
         - **NOTE:** SSP does not generate the session ID; it is the responsibility of the application using SSP to provide one.
     - **(Q) Sequence Count:** Includes a 16-bit sequence count for tracking packet order.
-    - **(Z) Zstd Compression:** Indicates that the payload is compressed using Zstd.
+    - **(Z) Zstd Compression:** Indicates that the payload is compressed using Zstandard.
     - **(P) 16-bit Payload Size:** Specifies that the payload size uses 16 bits instead of the default 8 bits.
     - **(R) Reserved:** Bits reserved for future use.
 #### Example
 A header with the `F`, `S`, and `P` flags set would include a footer checksum, session ID, and a 16-bit payload size field. The structure dynamically adjusts based on the flags, allowing flexible and efficient packet formatting.
 
 ### Payload Details:
-The payload is divided into **segments**, where each `segment` consists of a type, size, and data:
+The payload is divided into multiple **segments**, each consisting of a type, size, and data:
 ```
 [  1-bit flag   ][   7-bit type   ][   8-16-bit size   ][   data ...   ]
 ```
@@ -43,7 +43,7 @@ The payload is divided into **segments**, where each `segment` consists of a typ
 - **Type (7 bits):** Specifies the type of data in the segment.
     - **NOTE:** SSP does not define segment types; these are determined by the application(s) using SSP. For example, types might include `PLAYER_POSITION = 1`, `GAME_EVENT = 2`, etc.
 - **Size (8 or 16 bits):** Represents the size of the data in bytes.
-- **Data:** The actual data contained in the segment.
+- **Data:** The actual data being transmitted in the segment.
 
 #### Example Payload Structure:
 ```
