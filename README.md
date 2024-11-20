@@ -1,10 +1,7 @@
 # SSP - Simple Segmented Protocol
+SSP is a dynamic, application-level binary protocol designed to work over both TCP and UDP. Its payload is divided into 'segments,' allowing multiple types of data to be transmitted within a single packet. For example, a single game packet could include a player's position, input, events, and more.
 
-SSP is an application-level, binary-based protocol with segmented payload and flexible design, compatible with both TCP and UDP.
-
-Primarily designed for transmitting various types of data within a single packet. For example, a single game packet can include multiple actions such as player movements, actions performed, and other events.
-
-This project includes both the protocol specification and its implementation as a C library.
+This project encompasses the protocol's structure, its implementation, and a C-based network library. The library is designed to buffer multiple data segments before serializing them into a single packet for transmission.
 
 ## Protocol Structure
 Here's a high-level overview of a packet:
@@ -13,26 +10,30 @@ Here's a high-level overview of a packet:
 ```
 ### Header Details:
 ```
-[ [32-bit magic][8-bit flags][8-bit segments][8-16-bit payload size] ]
+[32-bit magic] [8-bit flags] [8-bit segment_count] [8-16-bit payload_size]
+   [32-bit session_id (opt)] [16-bit sequence_count (opt)]
 ```
 - `magic`: A unique identifier for the packet.
-- `size`: The size of the payload in bytes.
-- `flags`: Options for the packet, represented by flag bits:
+- `segment_count`: The number of segments present in the payload.
+- `payload_size`: The size of the payload in bytes.
+- `flags`: A set of options for the packet, represented by the following bits:
 ```
-[0 1 2 3 4 5 6 7]
- F S Q Z R R R R
-
-  0: F - Footer Flag (SSP_FOOTER_BIT)
-  1: S - Session id  (SSP_SESSION_BIT)
-  2: Q - seQuence count (SSP_SEQUENCE_COUNT_BIT)
-  3: Z - Zstd payload compression. (SSP_ZSTD_COMPRESSION_BIT)
-4-7: R - Reserved
-
+   MSB [7 6 5 4 3 2 1 0] LSB
+        F S Q Z P R R R
 ```
-- `segments`: The number of segments present in the payload.
+- Flag Details:
+    - (F) Footer: Indicates the presence of a 32-bit checksum for the packet.
+    - (S) Session ID: Includes a 32-bit session ID (useful for UDP).
+    - (Q) Sequence Count: Includes a 16-bit sequence count for tracking packet order.
+    - (Z) Zstd Compression: Indicates that the payload is compressed using Zstd.
+    - (P) 16-bit Payload Size: Specifies that the payload size uses 16 bits instead of the default 8 bits.
+    - (R) Reserved: Bits reserved for future use.
+#### Example
+A header with the `F`, `S`, and `P` flags set would include a footer checksum, session ID, and a 16-bit payload size field. The structure dynamically adjusts based on the flags, allowing flexible and efficient packet formatting.
+
 ### Payload Details:
 
-The payload is divided into _segments_ (after optional session id and sequence count), with each `segment` consisting of a type, size, and data:
+The payload is divided into _segments_, with each `segment` consisting of a type, size, and data:
 ```
 [ [1-bit 16-bit size][7-bit type][8-16-bit size][data ...] ]
 ```
