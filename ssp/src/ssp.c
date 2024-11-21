@@ -7,8 +7,22 @@
 
 #define SSP_MAX_ACKS 8
 #define RESEND_SAFETY_MARGIN_MS 50
+#define SEQ_HALF (1 << 15)
+#define SEQ_MASK 0xFFFF
 
 static u32 ssp_magic = SSP_MAGIC;
+
+static inline bool
+ssp_is_seq_newer(u16 current_seq, u16 ref_seq)
+{
+	return ((current_seq - ref_seq) & SEQ_MASK) < SEQ_HALF;
+}
+
+static inline bool
+ssp_is_seq_older(u16 current_seq, u16 ref_seq)
+{
+	return !ssp_is_seq_newer(current_seq, ref_seq) && current_seq != ref_seq;
+}
 
 void 
 ssp_ctx_init(ssp_ctx_t* ctx)
@@ -591,20 +605,6 @@ ssp_parse_payload(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf,
 		{
 			const u16 seqc_recv = *(u16*)(payload + offset);
 
-			if (segbuf->last_seqc_recv + 1 != seqc_recv)
-			{
-				if (seqc_recv > segbuf->last_seqc_recv + 1)
-				{
-					printf("SSP: Possible packet loss. last_seqc_recv: %u < new seqc: %u. ~%d packets possibly lost.\n",
-							segbuf->last_seqc_recv, seqc_recv, seqc_recv - (segbuf->last_seqc_recv + 1));
-				}
-				else if (seqc_recv < segbuf->last_seqc_recv + 1)
-				{
-					printf("SSP: Out-of-order packet. last_seqc_recv: %u > new seqc: %u.\n", 
-							segbuf->last_seqc_recv, seqc_recv);
-				}
-			}
-
 			if (packet->header->flags & SSP_IMPORTANT_BIT)
 			{
 				if (seqc_recv == segbuf->last_seqc_recv)
@@ -616,7 +616,20 @@ ssp_parse_payload(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf,
 				ssp_ringi16_write(&segbuf->acks, seqc_recv);
 			}
 
-			segbuf->last_seqc_recv = seqc_recv;
+			if (ssp_is_seq_newer(seqc_recv, segbuf->last_seqc_recv))
+			{
+				segbuf->last_seqc_recv = seqc_recv;
+			}
+			else if (ssp_is_seq_older(seqc_recv, segbuf->last_seqc_recv))
+			{
+				// Out-of-Order.
+				printf("Out-of-Order: seqc_recv: %u, last_seqc: %u\n", seqc_recv, segbuf->last_seqc_recv);
+			}
+			else
+			{
+				// Duplicate 
+				return SSP_NOT_USED;
+			}
 		}
 
 		offset += sizeof(u16);
