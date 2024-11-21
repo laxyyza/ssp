@@ -55,10 +55,11 @@ ssp_get_segment_callback(ssp_ctx_t* ctx, u16 segtype)
 }
 
 u32 
-ssp_calc_psize(u32 payload_size, u8 flags)
+ssp_calc_psize(u32 payload_size, u32* header_size_p, u32* opt_data_offset_p, u8 flags)
 {
 	u16 header_size = sizeof(ssp_header_t);
 	u32 packet_size = payload_size;
+	u32 opt_data_offset = 0;
 
 	if (flags & SSP_16_BIT_PAYLOAD_BIT)
 		header_size += sizeof(u16); // +2 bytes
@@ -66,15 +67,28 @@ ssp_calc_psize(u32 payload_size, u8 flags)
 		header_size += sizeof(u8); //  +1 byte
 	
 	if (flags & SSP_FOOTER_BIT)
-		packet_size += sizeof(ssp_footer_t); // +4 bytes
+		header_size += sizeof(ssp_footer_t); // +4 bytes
+	
+	opt_data_offset = header_size;
+	
 	if (flags & SSP_SESSION_BIT)
-		packet_size += sizeof(u32);	// +4 bytes
+		header_size += sizeof(u32);	// +4 bytes
 	if (flags & SSP_SEQUENCE_COUNT_BIT)
-		packet_size += sizeof(u16);	// +2 bytes
+		header_size += sizeof(u16);	// +2 bytes
 	if (flags & SSP_ACK_BIT)
-		packet_size += sizeof(u16); // +2 bytes
+		header_size += sizeof(u16); // +2 bytes
+
+	if (opt_data_offset_p)
+	{
+		if (opt_data_offset == header_size)
+			*opt_data_offset_p = 0;
+		else
+			*opt_data_offset_p = opt_data_offset;
+	}
 
 	packet_size += header_size;
+	if (header_size_p)
+		*header_size_p = header_size;
 
 	return packet_size;
 }
@@ -88,44 +102,42 @@ ssp_checksum_size(const ssp_packet_t* packet)
 static void
 ssp_set_header_payload_size(ssp_packet_t* packet, u32 payload_size)
 {
-	u8 header_size = sizeof(ssp_header_t);
 	u8 footer_size = (packet->header->flags & SSP_FOOTER_BIT) ? sizeof(ssp_footer_t) : 0;
 
 	if (packet->header->flags & SSP_16_BIT_PAYLOAD_BIT)
-	{
 		memcpy(packet->header->payload_size, &payload_size, sizeof(u16));
-		header_size += sizeof(u16);
-	}
 	else
-	{
 		packet->header->payload_size[0] = (u8)payload_size;
-		header_size += sizeof(u8);
-	}
-	packet->size = header_size + payload_size + footer_size;
+
+	packet->size = packet->header_size + payload_size + footer_size;
 	packet->payload_size = payload_size;
-	packet->header_size = header_size;
 }
 
 ssp_packet_t*
-ssp_new_packet(u32 size, u8 flags)
+ssp_new_packet(u32 payload_size, u8 flags)
 {
     ssp_packet_t* packet;
-	u32 packet_size;;
-	if (size >= UINT8_MAX)
+	u32 packet_size;
+	u32 header_size;
+	u32 opt_data_offset;
+	if (payload_size >= UINT8_MAX)
 		flags |= SSP_16_BIT_PAYLOAD_BIT;
 
-	packet_size = ssp_calc_psize(size, flags);
+	packet_size = ssp_calc_psize(payload_size, &header_size, &opt_data_offset, flags);
 
 	packet = calloc(1, sizeof(ssp_packet_t));
     packet->buf = calloc(1, packet_size);
 	packet->header = packet->buf;
     packet->header->magic = ssp_magic;
     packet->header->flags = flags;
-	ssp_set_header_payload_size(packet, size);
+	packet->header_size = header_size;
+	if (opt_data_offset)
+		packet->opt_data.buf = packet->buf + opt_data_offset;
+	ssp_set_header_payload_size(packet, payload_size);
 
 	packet->payload = (u8*)packet->buf + packet->header_size;
 	if (flags & SSP_FOOTER_BIT)
-		packet->footer = (ssp_footer_t*)((u8*)packet->payload + size);
+		packet->footer = (ssp_footer_t*)((u8*)packet->payload + payload_size);
 	else
 		packet->footer = NULL;
 
@@ -153,16 +165,9 @@ ssp_checksum32(const void* data, u64 size)
 }
 
 u32 
-ssp_segbuf_serialized_size(const ssp_segbuf_t* segbuf)
+ssp_segbuf_serialized_size(const ssp_segbuf_t* segbuf, u8* flags)
 {
     u32 total = 0;
-
-	if (segbuf->flags & SSP_SESSION_BIT)
-		total += sizeof(u32);
-	if (segbuf->flags & SSP_SEQUENCE_COUNT_BIT)
-		total += sizeof(u16);
-	if (segbuf->flags & SSP_ACK_BIT || segbuf->acks.count)
-		total += sizeof(u16);
 
     for (u32 i = 0; i < segbuf->count; i++)
 	{
@@ -172,6 +177,9 @@ ssp_segbuf_serialized_size(const ssp_segbuf_t* segbuf)
 			total += sizeof(u16);
 		else
 			total += sizeof(u8);
+
+		if (flags && segbuf->data_refs[i].important)
+			*flags |= SSP_IMPORTANT_BIT;
 	}
 
     return total;
@@ -318,12 +326,46 @@ ssp_print_packet(ssp_ctx_t* ctx, const ssp_packet_t* packet, const u8* payload)
 }
 
 static void
-ssp_serialize(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
+ssp_serialize_header(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 {
-    u32 offset = 0;
+	u32 offset = 0;
 	u16 ack;
+
+	packet->header->segment_count = segbuf->count;
+
+	if (packet->opt_data.buf == NULL)
+		return;
+
+	if (packet->header->flags & SSP_SESSION_BIT)
+	{
+		packet->opt_data.session_id = packet->opt_data.buf + offset;
+		*packet->opt_data.session_id = segbuf->session_id;
+		offset += sizeof(u32);
+	}
+
+	if (packet->header->flags & SSP_SEQUENCE_COUNT_BIT)
+	{
+		packet->opt_data.seq = packet->opt_data.buf + offset;
+		*packet->opt_data.seq = ++segbuf->seqc_sent;
+		offset += sizeof(u16);
+	}
+
+	if (ssp_ring_read_u16(&segbuf->acks, &ack))
+	{
+		packet->opt_data.ack = packet->opt_data.buf + offset;
+		*packet->opt_data.ack = ack;
+		offset += sizeof(u16);
+	}
+}
+
+static void 
+ssp_serialize_payload(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
+{
+	u32 offset = 0;
 	void* payload;
-    packet->header->segment_count = segbuf->count;
+
+	if (packet->payload_size == 0)
+		return;
 
 	if (packet->header->flags & SSP_ZSTD_COMPRESSION_BIT || 
 		(segbuf->compression.auto_do && packet->payload_size > segbuf->compression.threshold))
@@ -333,25 +375,6 @@ ssp_serialize(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 	}
 	else
 		payload = packet->payload;
-
-	if (segbuf->flags & SSP_SESSION_BIT)
-	{
-		memcpy(payload + offset, &segbuf->session_id, sizeof(u32));
-		offset += sizeof(u32);
-	}
-	if (segbuf->flags & SSP_SEQUENCE_COUNT_BIT)
-	{
-		segbuf->seqc_sent++;
-		packet->sequence_count = segbuf->seqc_sent;
-		memcpy(payload + offset, &segbuf->seqc_sent, sizeof(u16));
-		offset += sizeof(u16);
-	}
-	if (ssp_ring_read_u16(&segbuf->acks, &ack))
-	{
-		memcpy((u8*)payload + offset, &ack, sizeof(u16));
-		packet->header->flags |= SSP_ACK_BIT;
-		offset += sizeof(u16);
-	}
 
     for (u32 i = 0; i < segbuf->count; i++)
     {
@@ -412,17 +435,28 @@ ssp_serialize(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 	}
 }
 
+static void
+ssp_serialize(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
+{
+	ssp_serialize_header(packet, segbuf);
+	ssp_serialize_payload(packet, segbuf);
+}
+
 ssp_packet_t* 
 ssp_serialize_packet(ssp_segbuf_t* segbuf)
 {
     ssp_packet_t* packet;
+	u8 packet_flags = segbuf->flags;
     u32 payload_size;
 
 	if (segbuf->count == 0 && segbuf->acks.count == 0)
         return NULL;
 
-    payload_size = ssp_segbuf_serialized_size(segbuf);
-    packet = ssp_new_packet(payload_size, segbuf->flags);
+	if (segbuf->acks.count)
+		packet_flags |= SSP_ACK_BIT;
+
+    payload_size = ssp_segbuf_serialized_size(segbuf, &packet_flags);
+    packet = ssp_new_packet(payload_size, packet_flags);
 
     ssp_serialize(packet, segbuf);
 
@@ -553,9 +587,8 @@ ssp_segbuf_destroy(ssp_segbuf_t* segbuf)
 	ssp_ring_free(&segbuf->acks);
 }
 
-static i32
-ssp_parse_payload(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, 
-				  const ssp_packet_t* packet, void* source_data)
+static inline i32
+ssp_parse_payload(ssp_ctx_t* ctx, const ssp_packet_t* packet, void* source_data)
 {
     i32 ret = SSP_SUCCESS;
     u32 offset = 0;
@@ -581,85 +614,6 @@ ssp_parse_payload(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf,
 
 	if (ctx->debug)
 		ssp_print_packet(ctx, packet, payload);
-
-	if (packet->header->flags & SSP_SESSION_BIT)
-	{
-		const u32 session_id = *(u32*)(payload + offset);
-
-		// Verify session ID...
-		if (ctx->verify_session)
-		{
-			void* new_source = NULL;
-			if (ctx->verify_session(session_id, ctx->user_data, source_data, &new_source, &segbuf) == false)
-				return SSP_FAILED;
-			if (new_source)
-				source_data = new_source;
-		}
-
-		offset += sizeof(u32);
-	}
-
-	if (packet->header->flags & SSP_SEQUENCE_COUNT_BIT)
-	{
-		if (segbuf)
-		{
-			const u16 seqc_recv = *(u16*)(payload + offset);
-
-			if (packet->header->flags & SSP_IMPORTANT_BIT)
-			{
-				if (seqc_recv == segbuf->last_seqc_recv)
-				{
-					printf("Dup import packet. Ignoring.\n");
-					return SSP_NOT_USED;
-				}
-
-				ssp_ring_write_u16(&segbuf->acks, seqc_recv);
-			}
-
-			if (ssp_is_seq_newer(seqc_recv, segbuf->last_seqc_recv))
-			{
-				segbuf->last_seqc_recv = seqc_recv;
-			}
-			else if (ssp_is_seq_older(seqc_recv, segbuf->last_seqc_recv))
-			{
-				// Out-of-Order.
-				printf("Out-of-Order: seqc_recv: %u, last_seqc: %u\n", seqc_recv, segbuf->last_seqc_recv);
-			}
-			else
-			{
-				// Duplicate 
-				return SSP_NOT_USED;
-			}
-		}
-
-		offset += sizeof(u16);
-	}
-	
-	if (packet->header->flags & SSP_ACK_BIT)
-	{
-		if (segbuf)
-		{
-			u16 ack;
-			memcpy(&ack, payload + offset, sizeof(u16));
-			
-			for (u32 i = 0; i < segbuf->important_packets.count; i++)
-			{
-				ssp_packet_t* imp_packet = ((ssp_packet_t**)segbuf->important_packets.buf)[i];
-
-				if (ack == imp_packet->sequence_count)
-				{
-					imp_packet->header->flags ^= SSP_IMPORTANT_BIT;
-					ssp_packet_free(imp_packet);
-					array_erase(&segbuf->important_packets, i);
-					break;
-				}
-			}
-		}
-		else
-			printf("ssp: SSP_ACK_BIT but no segbuf...\n");
-
-		offset += sizeof(u16);
-	}
 
     for (u32 i = 0; i < packet->header->segment_count; i++)
     {
@@ -695,10 +649,11 @@ ssp_parse_payload(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf,
     return (segment_called) ? ret : SSP_NOT_USED;
 }
 
-static void
-ssp_packet_get_payload(ssp_packet_t* packet)
+static inline void
+ssp_packet_set_offsets(ssp_packet_t* packet)
 {
 	u32 offset = sizeof(ssp_header_t);
+
 	if (packet->header->flags & SSP_16_BIT_PAYLOAD_BIT)
 	{
 		offset += sizeof(u16);
@@ -710,10 +665,33 @@ ssp_packet_get_payload(ssp_packet_t* packet)
 		packet->payload_size = *(u8*)packet->header->payload_size;
 	}
 
+	if (packet->header->flags & (SSP_SESSION_BIT | SSP_SEQUENCE_COUNT_BIT | SSP_ACK_BIT))
+	{
+		packet->opt_data.buf = packet->buf + offset;
+
+		if (packet->header->flags & SSP_SESSION_BIT)
+		{
+			packet->opt_data.session_id = packet->buf + offset;
+			offset += sizeof(u32);
+		}
+
+		if (packet->header->flags & SSP_SEQUENCE_COUNT_BIT)
+		{
+			packet->opt_data.seq = packet->buf + offset;
+			offset += sizeof(u16);
+		}
+
+		if (packet->header->flags & SSP_ACK_BIT)
+		{
+			packet->opt_data.ack = packet->buf + offset;
+			offset += sizeof(u16);
+		}
+	}
+
 	packet->payload = (u8*)packet->buf + offset;
 	packet->header_size = offset;
 	packet->size = packet->header_size + packet->payload_size;
-	
+
 	if (packet->header->flags & SSP_FOOTER_BIT)
 	{
 		packet->footer = (ssp_footer_t*)((u8*)packet->payload + packet->payload_size);
@@ -721,14 +699,154 @@ ssp_packet_get_payload(ssp_packet_t* packet)
 	}
 }
 
+static inline void 
+ssp_handle_incomplete_packet(ssp_packet_t* packet, ssp_segbuf_t* segbuf, u32 buf_size)
+{
+	if (segbuf)
+	{
+		segbuf->recv_incomplete.packet.buf = calloc(1, packet->size);
+		memcpy(segbuf->recv_incomplete.packet.buf, packet->buf, buf_size);
+		segbuf->recv_incomplete.packet.size = packet->size;
+		segbuf->recv_incomplete.current_size = buf_size;
+	}
+	else
+		fprintf(stderr, "WARNING: ssp_parse_buf: segbuf is NULL and packet is incomplete!\n");
+}
+
+static inline i32 
+ssp_packet_checksum(ssp_packet_t* packet)
+{
+	u32 our_checksum;
+	ssp_footer_t* footer;
+
+    if ((footer = packet->footer))
+    {
+        our_checksum = ssp_checksum32(packet->buf, ssp_checksum_size(packet));
+        if (our_checksum != footer->checksum)
+		{
+			printf("Corrupt packet. Checksum mismatch: 0x%X != 0x%X\n",
+					our_checksum, footer->checksum);
+            return SSP_FAILED;
+		}
+    }
+	return SSP_SUCCESS;
+}
+
+static inline i32 
+ssp_handle_session_id(ssp_packet_t* packet, ssp_ctx_t* ctx, ssp_segbuf_t** segbuf, void** source_data)
+{
+	if (ctx->verify_session)
+	{
+		void* new_source = NULL;
+		if (ctx->verify_session(
+						*packet->opt_data.session_id, 
+						ctx->user_data, 
+						*source_data, 
+						&new_source, 
+						segbuf) == false)
+		{
+			return SSP_FAILED;
+		}
+		if (new_source)
+			*source_data = new_source;
+	}
+	else
+		return SSP_FAILED;
+
+	return SSP_SUCCESS;
+}
+
+static inline i32
+ssp_handle_seqc(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
+{
+	if (segbuf)
+	{
+		// TODO: Implement reordering.
+		
+		if (packet->header->flags & SSP_IMPORTANT_BIT)
+			ssp_ring_write_u16(&segbuf->acks, *packet->opt_data.seq);
+
+		segbuf->last_seqc_recv = *packet->opt_data.seq;
+	}
+	else if (packet->header->flags & SSP_IMPORTANT_BIT)
+		return SSP_FAILED;	// We cant send ACK if no segbuf.
+	
+	return SSP_SUCCESS;
+}
+
+static inline void
+ssp_handle_ack(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
+{
+	if (segbuf)
+	{
+		for (u32 i = 0; i < segbuf->important_packets.count; i++)
+		{
+			ssp_packet_t* imp_packet = ((ssp_packet_t**)segbuf->important_packets.buf)[i];
+
+			if (*imp_packet->opt_data.seq == *packet->opt_data.ack)
+			{
+				imp_packet->header->flags ^= SSP_IMPORTANT_BIT;
+				ssp_packet_free(imp_packet);
+				array_erase(&segbuf->important_packets, i);
+				break;
+			}
+		}
+	}
+	else
+		printf("ssp: SSP_ACK_BIT but no segbuf...\n");
+}
+
+static inline i32
+ssp_parse_opt_data(ssp_packet_t* packet, ssp_ctx_t* ctx, ssp_segbuf_t** segbuf, void** source_data)
+{
+	if (packet->opt_data.session_id)
+	{
+		if (ssp_handle_session_id(packet, ctx, segbuf, source_data) != SSP_SUCCESS)
+			return SSP_FAILED;
+	}
+
+	if (packet->opt_data.seq)
+	{
+		if (ssp_handle_seqc(packet, *segbuf) != SSP_SUCCESS)
+			return SSP_FAILED;
+	}
+
+	if (packet->opt_data.ack)
+		ssp_handle_ack(packet, *segbuf);
+
+	return SSP_SUCCESS;
+}
+
+static i32
+ssp_parse_header(ssp_packet_t* packet, ssp_ctx_t* ctx, ssp_segbuf_t** segbuf, void* buf, u32 buf_size, void** source_data)
+{
+	memset(packet, 0, sizeof(ssp_packet_t));
+	packet->buf = packet->header = buf;
+
+	/* First check magic ID */
+    if (packet->header->magic != ssp_magic)
+		return SSP_FAILED;
+
+	/* Set offset pointers to buffer */
+	ssp_packet_set_offsets(packet);
+
+    if (packet->size > buf_size)
+    {
+		ssp_handle_incomplete_packet(packet, *segbuf, buf_size);
+		return SSP_INCOMPLETE;
+	}
+
+	if (ssp_packet_checksum(packet) == SSP_FAILED)
+		return SSP_FAILED;
+
+	return ssp_parse_opt_data(packet, ctx, segbuf, source_data);
+}
+
 i32
-ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, const void* buf, u32 buf_size, void* source_data)
+ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* buf, u32 buf_size, void* source_data)
 {
     i32 ret;
     ssp_packet_t packet;
-    ssp_footer_t* footer = NULL;
-    u32 our_checksum;
-    bool another_packet = false;
 
 	if (segbuf && segbuf->recv_incomplete.packet.buf)
 	{
@@ -743,43 +861,8 @@ ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, const void* buf, u32 buf_siz
 		segbuf->recv_incomplete.current_size = segbuf->recv_incomplete.packet.size = 0;
 	}
 
-	memset(&packet, 0, sizeof(ssp_packet_t));
-	packet.buf = (void*)buf;
-	packet.header = packet.buf;
-
-    if (packet.header->magic != ssp_magic)
-		return SSP_FAILED;
-
-	ssp_packet_get_payload(&packet);
-
-    if (packet.size > buf_size)
-    {
-		if (segbuf)
-		{
-			segbuf->recv_incomplete.packet.buf = calloc(1, packet.size);
-			memcpy(segbuf->recv_incomplete.packet.buf, buf, buf_size);
-			segbuf->recv_incomplete.packet.size = packet.size;
-			segbuf->recv_incomplete.current_size = buf_size;
-		}
-		else
-			fprintf(stderr, "WARNING: ssp_parse_buf: segbuf is NULL and packet is incomplete!\n");
-		return SSP_INCOMPLETE;
-	}
-    else if (packet.size < buf_size)
-        another_packet = true;
-
-    if ((footer = packet.footer))
-    {
-        our_checksum = ssp_checksum32(packet.buf, ssp_checksum_size(&packet));
-        if (our_checksum != footer->checksum)
-		{
-			printf("Corrupt packet. Checksum mismatch: 0x%X != 0x%X\n",
-					our_checksum, footer->checksum);
-            return SSP_FAILED;
-		}
-    }
-
-    ret = ssp_parse_payload(ctx, segbuf, &packet, source_data);
+	if ((ret = ssp_parse_header(&packet, ctx, &segbuf, buf, buf_size, &source_data)) == SSP_SUCCESS)
+	    ret = ssp_parse_payload(ctx, &packet, source_data);
 
 	if (segbuf && segbuf->recv_incomplete.packet.buf && segbuf->recv_incomplete.packet.size == 0)
 	{
@@ -787,7 +870,7 @@ ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, const void* buf, u32 buf_siz
 		memset(&segbuf->recv_incomplete.packet, 0, sizeof(ssp_packet_t));
 	}
 
-    return (another_packet) ? SSP_MORE : ret;
+    return ret;
 }
 
 ssp_packet_t* 

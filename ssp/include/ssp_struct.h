@@ -125,12 +125,20 @@ typedef struct ssp_packet
 
 	// This will be the same as `void* buf`
     ssp_header_t*	header;	
+
+	/*	Meta data in header (after header->size) */
+	struct {
+		void* buf;
+		u32* session_id;
+		u16* seq;
+		u16* ack;
+	} opt_data;
+
 	// This will point to where the payload starts in `void* buf`
 	void*			payload;
 	// This will point to where the footer is in `void* buf`
 	ssp_footer_t*	footer;
 
-	u16 sequence_count;
 	u32 retries;
 	bool last_retry;
 
