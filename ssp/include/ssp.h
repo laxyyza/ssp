@@ -57,7 +57,7 @@ typedef struct
 	f32 retry_interval_ms;
 	u32 max_retries;
 	array_t important_packets;
-	ssp_ringi16_t acks;
+	ssp_ring_t acks;
 } ssp_segbuf_t;
 
 typedef void (*ssp_segment_callback_t)(const ssp_segment_t*, void* user_data, void* source_data);

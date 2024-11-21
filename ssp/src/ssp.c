@@ -346,7 +346,7 @@ ssp_serialize(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 		memcpy(payload + offset, &segbuf->seqc_sent, sizeof(u16));
 		offset += sizeof(u16);
 	}
-	if (ssp_ringi16_read(&segbuf->acks, &ack))
+	if (ssp_ring_read_u16(&segbuf->acks, &ack))
 	{
 		memcpy((u8*)payload + offset, &ack, sizeof(u16));
 		packet->header->flags |= SSP_ACK_BIT;
@@ -487,7 +487,7 @@ ssp_segbuf_init(ssp_segbuf_t* segbuf, u32 init_size, u8 flags)
 	segbuf->retry_interval_ms = 300.0;
 	segbuf->max_retries = 3;
 
-	ssp_ringi16_init(&segbuf->acks, SSP_MAX_ACKS);
+	ssp_ring_init(&segbuf->acks, sizeof(u16), SSP_MAX_ACKS);
 	array_init(&segbuf->important_packets, sizeof(ssp_packet_t**), SSP_MAX_ACKS);
 }
 
@@ -550,7 +550,7 @@ ssp_segbuf_destroy(ssp_segbuf_t* segbuf)
 {
 	free(segbuf->data_refs);
 	array_del(&segbuf->important_packets);
-	ssp_ringi16_free(&segbuf->acks);
+	ssp_ring_free(&segbuf->acks);
 }
 
 static i32
@@ -613,7 +613,7 @@ ssp_parse_payload(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf,
 					return SSP_NOT_USED;
 				}
 
-				ssp_ringi16_write(&segbuf->acks, seqc_recv);
+				ssp_ring_write_u16(&segbuf->acks, seqc_recv);
 			}
 
 			if (ssp_is_seq_newer(seqc_recv, segbuf->last_seqc_recv))

@@ -2,38 +2,71 @@
 #include <stdlib.h>
 
 void 
-ssp_ringi16_init(ssp_ringi16_t* ring, u32 size)
+ssp_ring_init(ssp_ring_t* ring, u32 element_size, u32 max_elements)
 {
-	ring->buf = calloc(size, sizeof(u16));
-	ring->end = ring->buf + size - 1;
+	ring->size = element_size * max_elements;
+	ring->buf = calloc(1, ring->size);
+	ring->end = ring->buf + ring->size - 1;
 	ring->read = ring->buf;
 	ring->write = ring->buf;
-	ring->size = size;
+	ring->ele_size = element_size;
+	ring->max_elements = max_elements;
 	ring->count = 0;
 }
 
 void 
-ssp_ringi16_write(ssp_ringi16_t* ring, u16 val)
+ssp_ring_write_ptr(ssp_ring_t* ring, void* ptr)
 {
-	*ring->write = val;
+	*(void**)ring->write = ptr;
+	ring->write += sizeof(void*);
 
-	ring->write++;
 	if (ring->write > ring->end)
 		ring->write = ring->buf;
 
 	ring->count++;
-	if ((u32)ring->count > ring->size)
-		ring->count = ring->size;
+	if ((u32)ring->count > ring->max_elements)
+		ring->count = ring->max_elements;
+}
+
+void 
+ssp_ring_write_u16(ssp_ring_t* ring, u16 val)
+{
+	*(u16*)ring->write = val;
+
+	ring->write += sizeof(u16);
+	if (ring->write > ring->end)
+		ring->write = ring->buf;
+
+	ring->count++;
+	if ((u32)ring->count > ring->max_elements)
+		ring->count = ring->max_elements;
 }
 
 bool 
-ssp_ringi16_read(ssp_ringi16_t* ring, u16* val)
+ssp_ring_read_u16(ssp_ring_t* ring, u16* val)
 {
 	if (ring->count <= 0)
 		return false;
 
-	*val = *ring->read;
-	ring->read++;
+	*val = *(u16*)ring->read;
+	ring->read += sizeof(u16);
+
+	if (ring->read > ring->end)
+		ring->read = ring->buf;
+
+	ring->count--;
+
+	return true;
+}
+
+bool 
+ssp_ring_read_ptr(ssp_ring_t* ring, void** ptr)
+{
+	if (ring->count <= 0)
+		return false;
+
+	*ptr = *(void**)ring->read;
+	ring->read += sizeof(void*);
 
 	if (ring->read > ring->end)
 		ring->read = ring->buf;
@@ -44,7 +77,7 @@ ssp_ringi16_read(ssp_ringi16_t* ring, u16* val)
 }
 
 void 
-ssp_ringi16_free(ssp_ringi16_t* ring)
+ssp_ring_free(ssp_ring_t* ring)
 {
 	free(ring->buf);
 }
