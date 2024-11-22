@@ -9,28 +9,28 @@ The packet consists of three main components: header, payload (which contains se
 ```
 [ [ header ] [ payload: {segment0, segment1, ...} ] [ footer (optional) ] ]
 ```
-![image](https://github.com/user-attachments/assets/e3b05edd-3cb6-486a-abea-cd8af12fabf3)
+![img](https://github.com/user-attachments/assets/78989527-9f40-4c35-bf58-685400bd715d)
 ### Header Details:
 ```
-[32-bit magic] [8-bit flags] [8-bit segment_count] [8-16-bit payload_size]
-   [32-bit session_id (opt)] [16-bit sequence_count (opt)]
+[ 32-bit magic | 8-bit flags | 8-bit segment_count | 8-16-bit payload_size |
+  32-bit session_id (opt) | 16-bit sequence_count (opt) | 16-bit ACK (opt) ]
 ```
+7-16 bytes. 
 - `magic`: A unique identifier for the packet.
 - `segment_count`: The number of segments present in the payload.
 - `payload_size`: The size of the payload in bytes.
 - `flags`: A set of options for the packet, represented by the following bits:
 ```
    MSB [7 6 5 4 3 2 1 0] LSB
-        F S Q Z P I A R
+        F S I Z P A R R
 ```
 - **Flag Details:**
     - **(F) Footer:** Indicates the presence of a 32-bit checksum for the packet.
     - **(S) Session ID:** Includes a 32-bit session ID (useful for UDP).
         - **NOTE:** SSP does not generate the session ID; it is the responsibility of the application using SSP to provide one.
-    - **(Q) Sequence Count:** Includes a 16-bit sequence count for tracking packet order.
+    - **(I) Important:** Marks the packet as "important," enhancing its reliability for delivery and ensuring in-order processing. Includes a 16-bit sequence number. The receiver MUST acknowledge the packet by sending an ACK with its sequence number. However, delivery is not guaranteed.
     - **(Z) Zstd Compression:** Indicates that the payload is compressed using Zstandard.
     - **(P) 16-bit Payload Size:** Specifies that the payload size uses 16 bits instead of the default 8 bits.
-    - **(I) Important:** (Depends on the `Q` flag) Marks the packet as 'important'; the receiver must send an acknowledgment (ACK).
     - **(A) ACK:** Acknowledgment packet containing the sequence count.
     - **(R) Reserved:** Bits reserved for future use.
 #### Example
@@ -39,7 +39,7 @@ A header with the `F`, `S`, and `P` flags set would include a footer checksum, s
 ### Payload Details:
 The payload is divided into multiple **segments**, each consisting of a type, size, and data:
 ```
-[  1-bit flag   ][   7-bit type   ][   8-16-bit size   ][   data ...   ]
+[ 1-bit flag | 7-bit type | 8-16-bit size | data ... ]
 ```
 - The **1-bit flag** indicates whether the segment size is 16 bits:
     - If the flag is set, the size field is 16 bits; otherwise, it is 8 bits.
