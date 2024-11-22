@@ -454,11 +454,33 @@ ssp_segbuf_clear(ssp_segbuf_t* segbuf)
     ssp_segbuf_resize(segbuf, segbuf->min_size);
 }
 
+static void
+ssp_segbuf_cleanup_imp_packets(ssp_segbuf_t* segbuf)
+{
+	for (u32 i = 0; i < segbuf->important_packets.count; i++)
+	{
+		ssp_packet_t* packet = ((ssp_packet_t**)segbuf->important_packets.buf)[i];
+		ssp_packet_free(packet);
+	}
+	array_del(&segbuf->important_packets);
+}
+
+static void
+ssp_segbuf_cleanup_window(ssp_segbuf_t* segbuf)
+{
+	for (u32 i = 0; i < SSP_WINDOW_SIZE; i++)
+	{
+		ssp_packet_t* packet = segbuf->sliding_window.window[i];
+		ssp_packet_free(packet);
+	}
+}
+
 void 
 ssp_segbuf_destroy(ssp_segbuf_t* segbuf)
 {
+	ssp_segbuf_cleanup_window(segbuf);
 	free(segbuf->data_refs);
-	array_del(&segbuf->important_packets);
+	ssp_segbuf_cleanup_imp_packets(segbuf);
 	ssp_ring_free(&segbuf->acks);
 }
 
@@ -638,11 +660,10 @@ ssp_handle_seqc(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 		const u16 new_seq = *packet->opt_data.seq;
 		const u16 esn = segbuf->sliding_window.next_seq;
 
-		ret = SSP_PARSE_BUFFERED;
-
 		if (new_seq == esn)
 		{
 			ssp_window_add_packet(&segbuf->sliding_window, packet);
+			ret = SSP_PARSE_BUFFERED;
 		}
 		else if (new_seq < esn)
 		{
@@ -654,6 +675,7 @@ ssp_handle_seqc(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 			if (new_seq < esn + SSP_WINDOW_SIZE)
 			{
 				ssp_window_add_packet(&segbuf->sliding_window, packet);
+				ret = SSP_PARSE_BUFFERED;
 			}
 			else
 				ret = SSP_PARSE_DROPPED;
