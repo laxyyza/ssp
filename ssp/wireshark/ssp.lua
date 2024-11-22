@@ -3,11 +3,10 @@ ssp_proto = Proto("my_ssp", "Simple Segmented Protocol")
 local SSPFlags = {
     FOOTER = 0x80,               -- 10000000
     SESSION = 0x40,              -- 01000000
-    SEQUENCE_COUNT = 0x20,       -- 00100000
+    IMPORTANT = 0x20,			 -- 00100000
     ZSTD_COMPRESSION = 0x10,     -- 00010000
     PAYLOAD_16_BIT = 0x08,       -- 00001000
-    IMPORTANT = 0x04,			 -- 00000100
-    ACK	= 0x02,					 -- 00000010
+    ACK = 0x04,					 -- 00000100
 }
 
 -- Define fields
@@ -16,16 +15,15 @@ ssp_proto.fields.flags = ProtoField.uint8("ssp.flags", "Flags", base.HEX)
 ssp_proto.fields.segment_count = ProtoField.uint8("ssp.segment_count", "Segment Count", base.DEC)
 ssp_proto.fields.payload_size = ProtoField.uint16("ssp.payload_size", "Payload Size", base.DEC)
 ssp_proto.fields.session_id = ProtoField.uint32("ssp.session_id", "Session ID", base.HEX)
-ssp_proto.fields.sequence_count = ProtoField.uint16("ssp.sequence_count", "Sequence Count", base.DEC)
+ssp_proto.fields.important = ProtoField.uint16("ssp.important", "Sequence Count (I)", base.DEC)
 ssp_proto.fields.ack = ProtoField.uint16("ssp.ack", "ACK", base.DEC)
 
 -- Add individual flag descriptions
 ssp_proto.fields.flag_footer = ProtoField.bool("ssp.flags.footer", "Footer Present (F)", 8, nil, SSPFlags.FOOTER)
 ssp_proto.fields.flag_session = ProtoField.bool("ssp.flags.session", "Session ID Present (S)", 8, nil, SSPFlags.SESSION)
-ssp_proto.fields.flag_sequence = ProtoField.bool("ssp.flags.sequence", "Sequence Count Present (Q)", 8, nil, SSPFlags.SEQUENCE_COUNT)
+ssp_proto.fields.flag_important = ProtoField.bool("ssp.flags.important", "Important (I)", 8, nil, SSPFlags.IMPORTANT)
 ssp_proto.fields.flag_compression = ProtoField.bool("ssp.flags.compression", "Zstd Compression (Z)", 8, nil, SSPFlags.ZSTD_COMPRESSION)
 ssp_proto.fields.flag_payload = ProtoField.bool("ssp.flags.payload", "16-bit Payload Size (P)", 8, nil, SSPFlags.PAYLOAD_16_BIT)
-ssp_proto.fields.flag_important = ProtoField.bool("ssp.flags.important", "Important (I)", 8, nil, SSPFlags.IMPORTANT)
 ssp_proto.fields.flag_ack = ProtoField.bool("ssp.flags.ack", "ACK (A)", 8, nil, SSPFlags.ACK)
 
 -- Segment Fields
@@ -47,10 +45,9 @@ function ssp_proto.dissector(buffer, pinfo, tree)
     -- Add flag breakdown
     flags_tree:add(ssp_proto.fields.flag_footer, buffer(4, 1))
     flags_tree:add(ssp_proto.fields.flag_session, buffer(4, 1))
-    flags_tree:add(ssp_proto.fields.flag_sequence, buffer(4, 1))
+    flags_tree:add(ssp_proto.fields.flag_important, buffer(4, 1))
     flags_tree:add(ssp_proto.fields.flag_compression, buffer(4, 1))
     flags_tree:add(ssp_proto.fields.flag_payload, buffer(4, 1))
-    flags_tree:add(ssp_proto.fields.flag_important, buffer(4, 1))
     flags_tree:add(ssp_proto.fields.flag_ack, buffer(4, 1))
 
     -- Segment Count
@@ -90,9 +87,9 @@ function ssp_proto.dissector(buffer, pinfo, tree)
 
     -- Optional sequence_count (if SSP_SEQUENCE_COUNT_BIT is set)
     local sequence_count = nil
-    if (flags & SSPFlags.SEQUENCE_COUNT) ~= 0 then
+    if (flags & SSPFlags.IMPORTANT) ~= 0 then
         sequence_count = buffer(payload_offset, 2):le_uint()
-        subtree:add_le(ssp_proto.fields.sequence_count, buffer(payload_offset, 2))
+        subtree:add_le(ssp_proto.fields.important, buffer(payload_offset, 2))
         payload_offset = payload_offset + 2
     end
 
