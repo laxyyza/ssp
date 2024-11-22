@@ -3,7 +3,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <zstd.h>
-#include <time.h>
 
 #define SSP_MAX_ACKS 8
 #define RESEND_SAFETY_MARGIN_MS 50
