@@ -10,7 +10,21 @@
 #define SEQ_HALF (1 << 15)
 #define SEQ_MASK 0xFFFF
 
+enum ssp_parse_status
+{
+	SSP_PARSE_DO_IMMEDIATELY,
+	SSP_PARSE_BUFFERED,
+	SSP_PARSE_DROPPED,
+	SSP_PARSE_FAILED = -1
+};
+
 static u32 ssp_magic = SSP_MAGIC;
+
+static inline u64
+ssp_addr_diff(void* base, void* offset)
+{
+	return ((u64)offset) - ((u64)base);
+}
 
 static inline bool
 ssp_is_seq_newer(u16 current_seq, u16 ref_seq)
@@ -73,7 +87,7 @@ ssp_calc_psize(u32 payload_size, u32* header_size_p, u32* opt_data_offset_p, u8 
 	
 	if (flags & SSP_SESSION_BIT)
 		header_size += sizeof(u32);	// +4 bytes
-	if (flags & SSP_SEQUENCE_COUNT_BIT)
+	if (flags & SSP_IMPORTANT_BIT)
 		header_size += sizeof(u16);	// +2 bytes
 	if (flags & SSP_ACK_BIT)
 		header_size += sizeof(u16); // +2 bytes
@@ -185,146 +199,6 @@ ssp_segbuf_serialized_size(const ssp_segbuf_t* segbuf, u8* flags)
     return total;
 }
 
-static void 
-ssp_bytes_name(const u8* buf, u32 count, u32 tab_count, const char* name)
-{
-	if (tab_count == 0)
-		tab_count = 1;
-
-	printf("\t\t");
-
-	for (u32 i = 0; i < count; i++)
-		printf("%.2X ", buf[i]);
-
-	for (u32 i = 0; i < tab_count; i++)
-		printf("\t");
-
-	if (count == sizeof(u8))
-		printf("(%u)", *buf);
-	else if (count == sizeof(u16))
-		printf("(%u)", *(u16*)buf);
-	else if (count == sizeof(u32))
-		printf("(%u)", *(u32*)buf);
-
-	for (u32 i = 0; i < tab_count; i++)
-		printf("\t");
-
-	printf("%s\n", name);
-}
-
-void
-ssp_print_packet(ssp_ctx_t* ctx, const ssp_packet_t* packet, const u8* payload)
-{
-	const u8* buf = packet->buf;
-	u32 offset = 0;
-	u32 payload_size;
-
-	printf("\n---[SSP Packet. Size: %u, Payload: %u]---\n{\n\t", 
-		packet->size, packet->payload_size);
-
-	printf("-[SSP Header]-\n\t{\n");
-	ssp_bytes_name(buf + offset, sizeof(u32), 1, "SSP_MAGIC");
-	offset += sizeof(u32);
-
-#define FLAGS_NAME_LEN 256
-#define SEGMENT_DATA_MAX 16
-
-	char flags_name[FLAGS_NAME_LEN] = "FLAGS (";
-	if (packet->header->flags & SSP_FOOTER_BIT)
-		strcat(flags_name, "SSP_FOOTER_BIT | ");
-	if (packet->header->flags & SSP_SESSION_BIT)
-		strcat(flags_name, "SSP_SESSION_BIT | ");
-	if (packet->header->flags & SSP_SEQUENCE_COUNT_BIT)
-		strcat(flags_name, "SSP_SEQUENCE_COUNT_BIT | ");
-	if (packet->header->flags & SSP_ZSTD_COMPRESSION_BIT)
-		strcat(flags_name, "SSP_ZSTD_COMPRESSION_BIT | ");
-	if (packet->header->flags & SSP_16_BIT_PAYLOAD_BIT)
-		strcat(flags_name, "SSP_16_BIT_PAYLOAD_BIT | ");
-
-	flags_name[strlen(flags_name) - 3] = 0x00;
-
-	strcat(flags_name, ")");
-
-	ssp_bytes_name(buf + offset, sizeof(u8), 2, flags_name);
-	offset += sizeof(u8);
-	ssp_bytes_name(buf + offset, sizeof(u8), 2, "SEGMENT_COUNT");
-	offset += sizeof(u8);
-
-	if (packet->header->flags & SSP_16_BIT_PAYLOAD_BIT)
-		payload_size = sizeof(u16);
-	else
-		payload_size = sizeof(u8);
-
-	ssp_bytes_name(buf + offset, payload_size, 2, "PAYLOAD_SIZE");
-	offset = 0;
-	buf = payload;
-
-	printf("\t}\n\t-[SSP Payload]-\n\t}\n");
-	if (packet->header->flags & SSP_SESSION_BIT)
-	{
-		ssp_bytes_name(buf + offset, sizeof(u32), 1, "SSP_SESSION_BIT");
-		offset += sizeof(u32);
-	}
-	if (packet->header->flags & SSP_SEQUENCE_COUNT_BIT)
-	{
-		ssp_bytes_name(buf + offset, sizeof(u16), 2, "SSP_SEQUENCE_COUNT_BIT");
-		offset += sizeof(u16);
-	}
-
-	for (u32 i = 0; i < packet->header->segment_count; i++)
-	{
-		printf("\t\t-[SSP Segment %u]-\n\t\t{\n\t", i);
-		u8 segment_type = buf[offset];
-		u32 segment_payload_size;
-		u32 segment_size;
-		bool _16bit_size = false;
-
-		char segment_type_str[FLAGS_NAME_LEN];
-		snprintf(segment_type_str, FLAGS_NAME_LEN, "TYPE \"%s\"", (ctx->segment_type_str) ? ctx->segment_type_str(segment_type) : "");
-
-		if (segment_type & SSP_SEGMENT_16BIT_PAYLOAD)
-		{
-			strcat(segment_type_str, " (SSP_SEGMENT_16BIT_PAYLOAD)");
-			((u8*)buf)[offset] ^= SSP_SEGMENT_16BIT_PAYLOAD;
-			_16bit_size = true;
-		}
-
-		ssp_bytes_name(buf + offset, sizeof(u8), 1, segment_type_str);
-		offset += sizeof(u8);
-
-		if (_16bit_size)
-		{
-			segment_payload_size = sizeof(u16);
-			((u8*)buf)[offset - 1] ^= SSP_SEGMENT_16BIT_PAYLOAD;
-			segment_size = *(u16*)(buf + offset);
-		}
-		else
-		{
-			segment_payload_size = sizeof(u8);
-			segment_size = *(buf + offset);
-		}
-
-		printf("\t");
-		ssp_bytes_name(buf + offset, segment_payload_size, 1, "SEGMENT_SIZE");
-		offset += segment_payload_size;
-
-		printf("\t\t\t[ ");
-		for (u32 j = 0; j < ((segment_size > SEGMENT_DATA_MAX) ? SEGMENT_DATA_MAX : segment_size); j++)
-		{
-			printf("%.2X ", payload[offset + j]);
-		}
-		if (segment_size > SEGMENT_DATA_MAX)
-			printf("... ");
-		printf("]\n");
-
-		offset += segment_size;
-
-		printf("\t\t}\n");
-	}
-
-	printf("\t}\n}\n");
-}
-
 static void
 ssp_serialize_header(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 {
@@ -343,7 +217,7 @@ ssp_serialize_header(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 		offset += sizeof(u32);
 	}
 
-	if (packet->header->flags & SSP_SEQUENCE_COUNT_BIT)
+	if (packet->header->flags & SSP_IMPORTANT_BIT)
 	{
 		packet->opt_data.seq = packet->opt_data.buf + offset;
 		*packet->opt_data.seq = ++segbuf->seqc_sent;
@@ -521,6 +395,7 @@ ssp_segbuf_init(ssp_segbuf_t* segbuf, u32 init_size, u8 flags)
 	segbuf->retry_interval_ms = 300.0;
 	segbuf->max_retries = 3;
 
+	ssp_window_init(&segbuf->sliding_window);
 	ssp_ring_init(&segbuf->acks, sizeof(u16), SSP_MAX_ACKS);
 	array_init(&segbuf->important_packets, sizeof(ssp_packet_t**), SSP_MAX_ACKS);
 }
@@ -612,9 +487,6 @@ ssp_parse_payload(ssp_ctx_t* ctx, const ssp_packet_t* packet, void* source_data)
 	else
 		payload = (void*)packet->payload;
 
-	if (ctx->debug)
-		ssp_print_packet(ctx, packet, payload);
-
     for (u32 i = 0; i < packet->header->segment_count; i++)
     {
 		ssp_segment_t segment;
@@ -665,7 +537,7 @@ ssp_packet_set_offsets(ssp_packet_t* packet)
 		packet->payload_size = *(u8*)packet->header->payload_size;
 	}
 
-	if (packet->header->flags & (SSP_SESSION_BIT | SSP_SEQUENCE_COUNT_BIT | SSP_ACK_BIT))
+	if (packet->header->flags & (SSP_SESSION_BIT | SSP_IMPORTANT_BIT | SSP_ACK_BIT))
 	{
 		packet->opt_data.buf = packet->buf + offset;
 
@@ -675,7 +547,7 @@ ssp_packet_set_offsets(ssp_packet_t* packet)
 			offset += sizeof(u32);
 		}
 
-		if (packet->header->flags & SSP_SEQUENCE_COUNT_BIT)
+		if (packet->header->flags & SSP_IMPORTANT_BIT)
 		{
 			packet->opt_data.seq = packet->buf + offset;
 			offset += sizeof(u16);
@@ -756,22 +628,43 @@ ssp_handle_session_id(ssp_packet_t* packet, ssp_ctx_t* ctx, ssp_segbuf_t** segbu
 	return SSP_SUCCESS;
 }
 
-static inline i32
+static inline enum ssp_parse_status
 ssp_handle_seqc(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 {
+	enum ssp_parse_status ret = SSP_PARSE_DO_IMMEDIATELY;
+
 	if (segbuf)
 	{
-		// TODO: Implement reordering.
-		
-		if (packet->header->flags & SSP_IMPORTANT_BIT)
-			ssp_ring_write_u16(&segbuf->acks, *packet->opt_data.seq);
+		const u16 new_seq = *packet->opt_data.seq;
+		const u16 esn = segbuf->sliding_window.next_seq;
 
-		segbuf->last_seqc_recv = *packet->opt_data.seq;
+		ret = SSP_PARSE_BUFFERED;
+
+		if (new_seq == esn)
+		{
+			ssp_window_add_packet(&segbuf->sliding_window, packet);
+		}
+		else if (new_seq < esn)
+		{
+			printf("Dropped packet: seq:%u, esn:%u\n", new_seq, esn);
+			ret = SSP_PARSE_DROPPED;
+		}
+		else 
+		{
+			if (new_seq < esn + SSP_WINDOW_SIZE)
+			{
+				ssp_window_add_packet(&segbuf->sliding_window, packet);
+			}
+			else
+				ret = SSP_PARSE_DROPPED;
+		}
+
+		ssp_ring_write_u16(&segbuf->acks, new_seq);
 	}
-	else if (packet->header->flags & SSP_IMPORTANT_BIT)
-		return SSP_FAILED;	// We cant send ACK if no segbuf.
+	else
+		return SSP_PARSE_FAILED;	// We cant send ACK if no segbuf.
 	
-	return SSP_SUCCESS;
+	return ret;
 }
 
 static inline void
@@ -796,36 +689,37 @@ ssp_handle_ack(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 		printf("ssp: SSP_ACK_BIT but no segbuf...\n");
 }
 
-static inline i32
+static inline enum ssp_parse_status
 ssp_parse_opt_data(ssp_packet_t* packet, ssp_ctx_t* ctx, ssp_segbuf_t** segbuf, void** source_data)
 {
+	enum ssp_parse_status status = SSP_PARSE_DO_IMMEDIATELY;
+
 	if (packet->opt_data.session_id)
 	{
 		if (ssp_handle_session_id(packet, ctx, segbuf, source_data) != SSP_SUCCESS)
-			return SSP_FAILED;
+			return SSP_PARSE_FAILED;
 	}
 
 	if (packet->opt_data.seq)
 	{
-		if (ssp_handle_seqc(packet, *segbuf) != SSP_SUCCESS)
-			return SSP_FAILED;
+		if ((status = ssp_handle_seqc(packet, *segbuf)) == SSP_PARSE_FAILED)
+			return status;
 	}
 
 	if (packet->opt_data.ack)
 		ssp_handle_ack(packet, *segbuf);
 
-	return SSP_SUCCESS;
+	return status;
 }
 
-static i32
+static enum ssp_parse_status
 ssp_parse_header(ssp_packet_t* packet, ssp_ctx_t* ctx, ssp_segbuf_t** segbuf, void* buf, u32 buf_size, void** source_data)
 {
-	memset(packet, 0, sizeof(ssp_packet_t));
 	packet->buf = packet->header = buf;
 
 	/* First check magic ID */
     if (packet->header->magic != ssp_magic)
-		return SSP_FAILED;
+		return SSP_PARSE_FAILED;
 
 	/* Set offset pointers to buffer */
 	ssp_packet_set_offsets(packet);
@@ -833,20 +727,38 @@ ssp_parse_header(ssp_packet_t* packet, ssp_ctx_t* ctx, ssp_segbuf_t** segbuf, vo
     if (packet->size > buf_size)
     {
 		ssp_handle_incomplete_packet(packet, *segbuf, buf_size);
-		return SSP_INCOMPLETE;
+		return SSP_PARSE_BUFFERED;
 	}
 
 	if (ssp_packet_checksum(packet) == SSP_FAILED)
-		return SSP_FAILED;
+		return SSP_PARSE_FAILED;
 
 	return ssp_parse_opt_data(packet, ctx, segbuf, source_data);
 }
 
 i32
+ssp_parse_sliding_window(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* source_data)
+{
+	i32 ret = SSP_SUCCESS;
+	const ssp_packet_t* packet;
+
+	while ((packet = ssp_window_get_packet(&segbuf->sliding_window, ctx->current_time)))
+	{
+		ret = ssp_parse_payload(ctx, packet, source_data);
+
+		packet->header->flags ^= SSP_IMPORTANT_BIT;
+		ssp_packet_free((void*)packet);
+	}
+
+	return ret;
+}
+
+i32
 ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* buf, u32 buf_size, void* source_data)
 {
-    i32 ret;
-    ssp_packet_t packet;
+	i32 ret = SSP_SUCCESS;
+	enum ssp_parse_status status;
+    ssp_packet_t* packet;
 
 	if (segbuf && segbuf->recv_incomplete.packet.buf)
 	{
@@ -861,8 +773,33 @@ ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* buf, u32 buf_size, voi
 		segbuf->recv_incomplete.current_size = segbuf->recv_incomplete.packet.size = 0;
 	}
 
-	if ((ret = ssp_parse_header(&packet, ctx, &segbuf, buf, buf_size, &source_data)) == SSP_SUCCESS)
-	    ret = ssp_parse_payload(ctx, &packet, source_data);
+	packet = calloc(1, sizeof(ssp_packet_t));
+	packet->timestamp = ctx->current_time;
+	status = ssp_parse_header(packet, ctx, &segbuf, buf, buf_size, &source_data);
+
+	switch (status)
+	{
+		case SSP_PARSE_DO_IMMEDIATELY:
+			ret = ssp_parse_payload(ctx, packet, source_data);
+			break;
+		case SSP_PARSE_BUFFERED:
+		{
+			ssp_parse_sliding_window(ctx, segbuf, source_data);
+			ret = SSP_BUFFERED;
+			break;
+		}
+		case SSP_PARSE_FAILED:
+			ret = SSP_FAILED;
+			break;
+		case SSP_PARSE_DROPPED:
+			ret = SSP_NOT_USED;
+			break;
+		default:
+			break;
+	}
+
+	if (status != SSP_PARSE_BUFFERED)
+		free(packet);
 
 	if (segbuf && segbuf->recv_incomplete.packet.buf && segbuf->recv_incomplete.packet.size == 0)
 	{
@@ -901,6 +838,11 @@ ssp_segbuf_get_resend_packet(ssp_segbuf_t* segbuf, f64 current_time)
 void
 ssp_segbuf_set_rtt(ssp_segbuf_t* segbuf, f32 rtt_ms)
 {
+	f32 new_window_interval = rtt_ms + SSP_WINDOW_TIMEOUT_MARGIN_MS;
+
+	if (new_window_interval >= SSP_WINDOW_TIMEOUT_MARGIN_MS)
+		segbuf->sliding_window.timeout_ms = new_window_interval;
+
 	f32 new_interval = rtt_ms + RESEND_SAFETY_MARGIN_MS;
 
 	if (new_interval >= RESEND_SAFETY_MARGIN_MS)

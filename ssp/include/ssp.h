@@ -7,9 +7,11 @@
 #include "ssp_window.h"
 
 #define _SSP_UNUSED __attribute__((unused))
+
+#define SSP_BUFFERED 3
+#define SSP_CALLBACK_NOT_ASSIGN 1
 #define SSP_SUCCESS 0
 #define SSP_FAILED -1
-#define SSP_CALLBACK_NOT_ASSIGN 1
 #define SSP_INCOMPLETE -2
 #define SSP_MORE 2
 #define SSP_NOT_USED -3
@@ -41,7 +43,6 @@ typedef struct
     u32 inc_size;   // How much to increase by
 	u32 session_id;
 	u16 seqc_sent;
-	u16 last_seqc_recv;
 	u8  flags;		// Packet Flags
 
 	struct {
@@ -77,6 +78,7 @@ typedef struct
 	ssp_session_verify_callback_t verify_session;
     void* user_data;
 	bool debug;
+	f64	 current_time;
 	const char* (*segment_type_str)(u8 type);
 } ssp_ctx_t;
 
@@ -179,8 +181,8 @@ void ssp_segbuf_destroy(ssp_segbuf_t* segbuf);
  * `source_data` - Pointer to metadata containing information about the origin of the network buffer.
  */
 i32 ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* buf, u32 buf_size, void* source_data);
+i32 ssp_parse_sliding_window(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* source_data);
 
-void ssp_print_packet(ssp_ctx_t* ctx, const ssp_packet_t* packet, const u8* payload);
 ssp_packet_t* ssp_segbuf_get_resend_packet(ssp_segbuf_t* segbuf, f64 current_time);
 void ssp_segbuf_set_rtt(ssp_segbuf_t* segbuf, f32 rtt_ms);
 

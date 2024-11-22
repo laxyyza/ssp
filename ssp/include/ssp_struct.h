@@ -51,11 +51,10 @@
 
 #define SSP_FOOTER_BIT				0x80
 #define SSP_SESSION_BIT				0x40
-#define SSP_SEQUENCE_COUNT_BIT		0x20
+#define SSP_IMPORTANT_BIT			0x20
 #define SSP_ZSTD_COMPRESSION_BIT	0x10
 #define SSP_16_BIT_PAYLOAD_BIT		0x08
-#define SSP_IMPORTANT_BIT			0x04
-#define SSP_ACK_BIT					0x02
+#define SSP_ACK_BIT					0x04
 
 /**
  * Header structure:
@@ -65,17 +64,16 @@
  *
  *  flags bits:
  *  MSB [7 6 5 4 3 2 1 0] LSB
- *		 F S Q Z P I A R
+ *		 F S I Z P A R R
  *      
  *      F (7)	- Footer
  *      S (6)	- Session id
- *      Q (5)	- seQuence count 
+ *      I (5)	- Important
  *      Z (4)	- Zstd packet compression.
  *      P (3)	- 16-bit Payload size.
- *      I (2)	- Important
- *      A (1)	- ACK
+ *      A (2)	- ACK
  *
- *      R (0) - Reserve
+ *      R (1-0) - Reserve
  */
 typedef struct ssp_header
 {
