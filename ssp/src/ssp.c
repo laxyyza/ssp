@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <zstd.h>
 
-#define SSP_MAX_ACKS 8
+#define SSP_MAX_ACKS 64
 #define RESEND_SAFETY_MARGIN_MS 50
 #define SEQ_HALF (1 << 15)
 #define SEQ_MASK 0xFFFF
@@ -89,7 +89,7 @@ ssp_calc_psize(u32 payload_size, u32* header_size_p, u32* opt_data_offset_p, u8 
 	if (flags & SSP_IMPORTANT_BIT)
 		header_size += sizeof(u16);	// +2 bytes
 	if (flags & SSP_ACK_BIT)
-		header_size += sizeof(u16); // +2 bytes
+		header_size += sizeof(u16) * 2; // +4 bytes
 
 	if (opt_data_offset_p)
 	{
@@ -195,6 +195,9 @@ ssp_segbuf_serialized_size(const ssp_segbuf_t* segbuf, u8* flags)
 			*flags |= SSP_IMPORTANT_BIT;
 	}
 
+	if (total == 0 && *flags & SSP_IMPORTANT_BIT)
+		*flags ^= SSP_IMPORTANT_BIT;
+
     return total;
 }
 
@@ -202,7 +205,6 @@ static void
 ssp_serialize_header(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 {
 	u32 offset = 0;
-	u16 ack;
 
 	packet->header->segment_count = segbuf->count;
 
@@ -223,11 +225,18 @@ ssp_serialize_header(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 		offset += sizeof(u16);
 	}
 
-	if (ssp_ring_read_u16(&segbuf->acks, &ack))
+	if (packet->header->flags & SSP_ACK_BIT)
 	{
-		packet->opt_data.ack = packet->opt_data.buf + offset;
-		*packet->opt_data.ack = ack;
+		packet->opt_data.ack_min = packet->opt_data.buf + offset;
 		offset += sizeof(u16);
+
+		packet->opt_data.ack_max = packet->opt_data.buf + offset;
+		offset += sizeof(u16);
+
+		*packet->opt_data.ack_min = (u16)segbuf->acks.min;
+		*packet->opt_data.ack_max = (u16)segbuf->acks.max;
+
+		segbuf->acks.min = segbuf->acks.max = -1;
 	}
 }
 
@@ -322,10 +331,10 @@ ssp_serialize_packet(ssp_segbuf_t* segbuf)
 	u8 packet_flags = segbuf->flags;
     u32 payload_size;
 
-	if (segbuf->count == 0 && segbuf->acks.count == 0)
+	if (segbuf->count == 0 && segbuf->acks.min == -1)
         return NULL;
 
-	if (segbuf->acks.count)
+	if (segbuf->acks.min >= 0)
 		packet_flags |= SSP_ACK_BIT;
 
     payload_size = ssp_segbuf_serialized_size(segbuf, &packet_flags);
@@ -373,11 +382,16 @@ ssp_insta_packet(ssp_segbuf_t* source_segbuf, u16 type, const void* buf, u64 siz
 		.session_id = source_segbuf->session_id,
 		.flags = source_segbuf->flags,
 		.seqc_sent = source_segbuf->seqc_sent,
-		.data_refs = &segment_ref
+		.data_refs = &segment_ref,
+		.acks = source_segbuf->acks
 	};
+
+	if (segbuf.flags & SSP_IMPORTANT_BIT)
+		segbuf.flags ^= SSP_IMPORTANT_BIT;
 
 	ret = ssp_serialize_packet(&segbuf);
 	source_segbuf->seqc_sent = segbuf.seqc_sent;
+	source_segbuf->acks = segbuf.acks;
 
 	return ret;
 }
@@ -393,9 +407,9 @@ ssp_segbuf_init(ssp_segbuf_t* segbuf, u32 init_size, u8 flags)
 	segbuf->flags = flags;
 	segbuf->retry_interval_ms = 300.0;
 	segbuf->max_retries = 3;
+	segbuf->acks.max = segbuf->acks.min = -1;
 
 	ssp_window_init(&segbuf->sliding_window);
-	ssp_ring_init(&segbuf->acks, sizeof(u16), SSP_MAX_ACKS);
 	array_init(&segbuf->important_packets, sizeof(ssp_packet_t**), SSP_MAX_ACKS);
 }
 
@@ -480,7 +494,6 @@ ssp_segbuf_destroy(ssp_segbuf_t* segbuf)
 	ssp_segbuf_cleanup_window(segbuf);
 	free(segbuf->data_refs);
 	ssp_segbuf_cleanup_imp_packets(segbuf);
-	ssp_ring_free(&segbuf->acks);
 }
 
 static inline i32
@@ -576,7 +589,10 @@ ssp_packet_set_offsets(ssp_packet_t* packet)
 
 		if (packet->header->flags & SSP_ACK_BIT)
 		{
-			packet->opt_data.ack = packet->buf + offset;
+			packet->opt_data.ack_min = packet->buf + offset;
+			offset += sizeof(u16);
+
+			packet->opt_data.ack_max = packet->buf + offset;
 			offset += sizeof(u16);
 		}
 	}
@@ -666,7 +682,7 @@ ssp_handle_seqc(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 		}
 		else if (new_seq < esn)
 		{
-			printf("Dropped packet: seq:%u, esn:%u\n", new_seq, esn);
+			printf("Outdated or duplicate packet: seq:%u, esn:%u\n", new_seq, esn);
 			ret = SSP_PARSE_DROPPED;
 		}
 		else 
@@ -680,7 +696,10 @@ ssp_handle_seqc(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 				ret = SSP_PARSE_DROPPED;
 		}
 
-		ssp_ring_write_u16(&segbuf->acks, new_seq);
+		if (segbuf->acks.min == -1 || new_seq < segbuf->acks.min)
+			segbuf->acks.min = new_seq;
+		if (new_seq > segbuf->acks.max)
+			segbuf->acks.max = new_seq;
 	}
 	else
 		return SSP_PARSE_FAILED;	// We cant send ACK if no segbuf.
@@ -693,16 +712,20 @@ ssp_handle_ack(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 {
 	if (segbuf)
 	{
+		const u16 min = *packet->opt_data.ack_min;
+		const u16 max = *packet->opt_data.ack_max;
+
 		for (u32 i = 0; i < segbuf->important_packets.count; i++)
 		{
 			ssp_packet_t* imp_packet = ((ssp_packet_t**)segbuf->important_packets.buf)[i];
+			const u16 seq = *imp_packet->opt_data.seq;
 
-			if (*imp_packet->opt_data.seq == *packet->opt_data.ack)
+			if (seq >= min && seq <= max)
 			{
 				imp_packet->header->flags ^= SSP_IMPORTANT_BIT;
 				ssp_packet_free(imp_packet);
 				array_erase(&segbuf->important_packets, i);
-				break;
+				i--;
 			}
 		}
 	}
@@ -727,7 +750,7 @@ ssp_parse_opt_data(ssp_packet_t* packet, ssp_ctx_t* ctx, ssp_segbuf_t** segbuf, 
 			return status;
 	}
 
-	if (packet->opt_data.ack)
+	if (packet->opt_data.ack_min)
 		ssp_handle_ack(packet, *segbuf);
 
 	return status;

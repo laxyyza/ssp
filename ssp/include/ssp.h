@@ -3,7 +3,6 @@
 #include "ssp_struct.h"
 #include <ght.h>
 #include <array.h>
-#include "ssp_ring.h"
 #include "ssp_window.h"
 
 #define _SSP_UNUSED __attribute__((unused))
@@ -23,6 +22,12 @@ typedef struct
     const void* data;
 	bool important;
 } ssp_data_ref_t;
+
+typedef struct 
+{
+	i32 min;
+	i32 max;
+} ssp_ack_tracking_t;
 
 /**
  * segbuf - Segment Buffer
@@ -59,7 +64,7 @@ typedef struct
 	f32 retry_interval_ms;
 	u32 max_retries;
 	array_t important_packets;
-	ssp_ring_t acks;
+	ssp_ack_tracking_t acks;
 	ssp_window_t sliding_window;
 } ssp_segbuf_t;
 

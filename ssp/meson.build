@@ -1,7 +1,6 @@
 ssp_src = files(
     'src/ssp.c',
     'src/ssp_tcp.c',
-    'src/ssp_ring.c',
     'src/ssp_window.c',
 )
 ssp_include = include_directories('include/')

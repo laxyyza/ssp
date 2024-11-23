@@ -14,6 +14,7 @@ typedef struct
 	u16		next_seq;
 	i32		count;
 	f32		timeout_ms;
+	i32		read_idx;
 } ssp_window_t;
 
 /* Returns true if packet should be processed, or false dont proceess */

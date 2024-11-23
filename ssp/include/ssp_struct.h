@@ -60,7 +60,7 @@
  * Header structure:
  *
  * [32-bit magic] [8-bit flags] [8-bit segment count] [8-16-bit payload size]
- *	  [32-bit session id (opt)] [16-bit sequence count | 16-bit ack (opt)]
+ *	  [32-bit session id (opt)] [16-bit sequence count | 32-bit ack (opt)]
  *
  *  flags bits:
  *  MSB [7 6 5 4 3 2 1 0] LSB
@@ -83,7 +83,7 @@ typedef struct ssp_header
     u8 payload_size[];
 	// optional u32 session ID
 	// optional u16 sequence count
-	// optional u16 ACK
+	// optional u32 ACK
 } _SSP_PACKED ssp_header_t;
 
 /**
@@ -129,7 +129,8 @@ typedef struct ssp_packet
 		void* buf;
 		u32* session_id;
 		u16* seq;
-		u16* ack;
+		u16* ack_min;
+		u16* ack_max;
 	} opt_data;
 
 	// This will point to where the payload starts in `void* buf`
