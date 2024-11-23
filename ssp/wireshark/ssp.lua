@@ -93,11 +93,16 @@ function ssp_proto.dissector(buffer, pinfo, tree)
         payload_offset = payload_offset + 2
     end
 
-    local ack = nil
+    local ack_min = nil
+    local ack_max = nil
     if (flags & SSPFlags.ACK) ~= 0 then
-        ack = buffer(payload_offset, 2):le_uint()
-        subtree:add_le(ssp_proto.fields.ack, buffer(payload_offset, 2))
+        ack_min = buffer(payload_offset, 2):le_uint()
         payload_offset = payload_offset + 2
+
+        ack_max = buffer(payload_offset, 2):le_uint()
+        payload_offset = payload_offset + 2
+
+        subtree:add_le(ssp_proto.fields.ack, buffer(payload_offset - 2, 2)):append_text("-" .. ack_max)
     end
 
 	local payload_tree = subtree:add("Payload: Segments", buffer(actual_payload_offset, payload_size))
