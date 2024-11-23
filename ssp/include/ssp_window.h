@@ -21,7 +21,7 @@ typedef struct
 void ssp_window_init(ssp_window_t* win);
 void ssp_window_add_packet(ssp_window_t* win, ssp_packet_t* packet);
 ssp_packet_t* ssp_window_get_packet(ssp_window_t* win, f64 current_time);
-void ssp_slide_window(ssp_window_t* win);
+void ssp_slide_window(ssp_window_t* win, u16 new_seq);
 void ssp_window_print(const ssp_window_t* win);
 
 #endif // _SSP_SLIDING_WINDOW_H_

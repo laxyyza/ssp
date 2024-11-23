@@ -693,7 +693,16 @@ ssp_handle_seqc(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 				ret = SSP_PARSE_BUFFERED;
 			}
 			else
-				ret = SSP_PARSE_DROPPED;
+			{
+				/**
+				 * Sequence count too large. It probably high jitter from sender. 
+				 * discard all buffered packets and slide window.
+				 */
+				printf("ssp: new_seq too large! Sliding window: %u -> %u\n", esn, new_seq);
+				ssp_slide_window(&segbuf->sliding_window, new_seq);
+				ssp_window_add_packet(&segbuf->sliding_window, packet);
+				ret = SSP_PARSE_BUFFERED;
+			}
 		}
 
 		if (segbuf->acks.min == -1 || new_seq < segbuf->acks.min)

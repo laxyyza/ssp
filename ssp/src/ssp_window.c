@@ -86,3 +86,18 @@ again:
 
 	return ret;
 }
+
+void 
+ssp_slide_window(ssp_window_t* win, u16 new_seq)
+{
+	/* Discard all packets in window */
+	for (u32 i = 0; i < SSP_WINDOW_SIZE; i++)
+	{
+		ssp_packet_t* p = win->window[i];
+		ssp_packet_free(p);
+		win->window[i] = NULL;
+	}
+	win->next_seq = new_seq;
+	win->count = 0;
+	win->read_idx = 0;
+}
