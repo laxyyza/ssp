@@ -195,7 +195,7 @@ ssp_segbuf_serialized_size(const ssp_segbuf_t* segbuf, u8* flags)
 			*flags |= SSP_IMPORTANT_BIT;
 	}
 
-	if (total == 0 && *flags & SSP_IMPORTANT_BIT)
+	if (total == 0 && flags && *flags & SSP_IMPORTANT_BIT)
 		*flags ^= SSP_IMPORTANT_BIT;
 
     return total;
@@ -473,6 +473,8 @@ ssp_segbuf_cleanup_imp_packets(ssp_segbuf_t* segbuf)
 	for (u32 i = 0; i < segbuf->important_packets.count; i++)
 	{
 		ssp_packet_t* packet = ((ssp_packet_t**)segbuf->important_packets.buf)[i];
+		if (packet->header->flags & SSP_IMPORTANT_BIT)
+			packet->header->flags ^= SSP_IMPORTANT_BIT;
 		ssp_packet_free(packet);
 	}
 	array_del(&segbuf->important_packets);
