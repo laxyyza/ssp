@@ -66,6 +66,12 @@ typedef struct
 	array_t important_packets;
 	ssp_ack_tracking_t acks;
 	ssp_window_t sliding_window;
+
+	u32 in_dropped_packets;
+	u32 in_total_packets;
+
+	u32 out_total_packets;
+	u32 rto; // Retransmission timeout
 } ssp_segbuf_t;
 
 typedef void (*ssp_segment_callback_t)(const ssp_segment_t*, void* user_data, void* source_data);

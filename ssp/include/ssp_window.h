@@ -15,6 +15,7 @@ typedef struct
 	i32		count;
 	f32		timeout_ms;
 	i32		read_idx;
+	u32		lost_packets;
 } ssp_window_t;
 
 /* Returns true if packet should be processed, or false dont proceess */

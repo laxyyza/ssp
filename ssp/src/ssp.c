@@ -345,6 +345,8 @@ ssp_serialize_packet(ssp_segbuf_t* segbuf)
     if (packet->footer)
 		packet->footer->checksum = ssp_checksum32(packet->buf, ssp_checksum_size(packet));
 
+	segbuf->out_total_packets++;
+
     ssp_segbuf_clear(segbuf);
 
 	if (packet->header->flags & SSP_IMPORTANT_BIT)
@@ -844,22 +846,37 @@ ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* buf, u32 buf_size, voi
 			break;
 		}
 		case SSP_PARSE_FAILED:
+		{
 			ret = SSP_FAILED;
+			if (segbuf)
+				segbuf->in_dropped_packets++;
 			break;
+		}
 		case SSP_PARSE_DROPPED:
+		{
 			ret = SSP_NOT_USED;
+			if (segbuf)
+				segbuf->in_dropped_packets++;
 			break;
+		}
 		default:
+			if (segbuf)
+				segbuf->in_dropped_packets++;
 			break;
 	}
 
 	if (status != SSP_PARSE_BUFFERED)
 		free(packet);
 
-	if (segbuf && segbuf->recv_incomplete.packet.buf && segbuf->recv_incomplete.packet.size == 0)
+	if (segbuf)
 	{
-		free(segbuf->recv_incomplete.packet.buf);
-		memset(&segbuf->recv_incomplete.packet, 0, sizeof(ssp_packet_t));
+		segbuf->in_total_packets++;
+
+		if (segbuf->recv_incomplete.packet.buf && segbuf->recv_incomplete.packet.size == 0)
+		{
+			free(segbuf->recv_incomplete.packet.buf);
+			memset(&segbuf->recv_incomplete.packet, 0, sizeof(ssp_packet_t));
+		}
 	}
 
     return ret;
@@ -883,6 +900,7 @@ ssp_segbuf_get_resend_packet(ssp_segbuf_t* segbuf, f64 current_time)
 				imp_packet->last_retry = true;
 				array_erase(&segbuf->important_packets, i);
 			}
+			segbuf->rto++;
 
 			return imp_packet;
 		}

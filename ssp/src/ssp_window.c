@@ -56,7 +56,7 @@ again:
 	{
 		win->window[win->read_idx] = NULL;
 		if (win->next_seq < *ret->opt_data.seq)
-			printf("next_seq:%u < seq:%u\n", win->next_seq, *ret->opt_data.seq);
+			win->lost_packets += *ret->opt_data.seq - win->next_seq;
 		win->next_seq = *ret->opt_data.seq + 1;
 		win->count--;
 		win->read_idx++;
@@ -90,6 +90,8 @@ again:
 void 
 ssp_slide_window(ssp_window_t* win, u16 new_seq)
 {
+	win->lost_packets += win->count;
+
 	/* Discard all packets in window */
 	for (u32 i = 0; i < SSP_WINDOW_SIZE; i++)
 	{
