@@ -102,7 +102,7 @@ function ssp_proto.dissector(buffer, pinfo, tree)
         ack_max = buffer(payload_offset, 2):le_uint()
         payload_offset = payload_offset + 2
 
-        subtree:add_le(ssp_proto.fields.ack, buffer(payload_offset - 2, 2)):append_text("-" .. ack_max)
+        subtree:add_le(ssp_proto.fields.ack, buffer(payload_offset - 4, 2)):append_text("-" .. ack_max)
     end
 
 	local payload_tree = subtree:add("Payload: Segments", buffer(actual_payload_offset, payload_size))
