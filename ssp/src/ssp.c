@@ -686,7 +686,6 @@ ssp_handle_seqc(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 		}
 		else if (new_seq < esn)
 		{
-			printf("Outdated or duplicate packet: seq:%u, esn:%u\n", new_seq, esn);
 			ret = SSP_PARSE_DROPPED;
 		}
 		else 
