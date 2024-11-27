@@ -13,7 +13,7 @@ The packet consists of three main components: header, payload (which contains se
 ### Header Details:
 ```
 [ 32-bit magic | 8-bit flags | 8-bit segment_count | 8-16-bit payload_size |
-  32-bit session_id (opt) | 16-bit sequence_count (opt) | 16-bit ACK (opt) ]
+  32-bit session_id (opt) | 16-bit sequence_count (opt) | 32-bit ACK-range (opt) ]
 ```
 7-16 bytes. 
 - `magic`: A unique identifier for the packet.
