@@ -19,24 +19,6 @@ enum ssp_parse_status
 
 static u32 ssp_magic = SSP_MAGIC;
 
-static inline u64
-ssp_addr_diff(void* base, void* offset)
-{
-	return ((u64)offset) - ((u64)base);
-}
-
-static inline bool
-ssp_is_seq_newer(u16 current_seq, u16 ref_seq)
-{
-	return ((current_seq - ref_seq) & SEQ_MASK) < SEQ_HALF;
-}
-
-static inline bool
-ssp_is_seq_older(u16 current_seq, u16 ref_seq)
-{
-	return !ssp_is_seq_newer(current_seq, ref_seq) && current_seq != ref_seq;
-}
-
 void 
 ssp_ctx_init(ssp_ctx_t* ctx)
 {
