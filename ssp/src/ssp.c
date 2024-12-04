@@ -455,7 +455,8 @@ ssp_segbuf_hook_add_i(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data,
 	ssp_data_ref_t* ref;
 
 	ref = ssp_segbuf_add_i(segbuf, type, size, data);
-	ref->serialize_hook = hook;
+	if (ref)
+		ref->serialize_hook = hook;
 
 	return ref;
 }
