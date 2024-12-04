@@ -265,7 +265,11 @@ ssp_serialize_payload(ssp_packet_t* packet, ssp_segbuf_t* segbuf)
 		}
 
 		// Copy data
-		memcpy(segment + segment_offset, data_ref->data, data_ref->size);
+		void* dest = segment + segment_offset;
+		if (data_ref->serialize_hook)
+			data_ref->serialize_hook(dest, data_ref->data, data_ref->size);
+		else
+			memcpy(dest, data_ref->data, data_ref->size);
 
 		// Set packet as important if at least one segment is important.
 		if (data_ref->important)
@@ -424,6 +428,7 @@ ssp_segbuf_add(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data)
     data_ref->size = size;
     data_ref->data = data;
 	data_ref->important = false;
+	data_ref->serialize_hook = NULL;
     segbuf->count++;
 
 	if (segbuf->count >= segbuf->size)
@@ -432,13 +437,37 @@ ssp_segbuf_add(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data)
 	return data_ref;
 }
 
-void 
+ssp_data_ref_t*
+ssp_segbuf_hook_add(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data, ssp_serialize_hook_t hook)
+{
+	ssp_data_ref_t* ref;
+
+	ref = ssp_segbuf_add(segbuf, type, size, data);
+	ref->serialize_hook = hook;
+
+	return ref;
+}
+
+ssp_data_ref_t*
+ssp_segbuf_hook_add_i(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data, ssp_serialize_hook_t hook)
+{
+	ssp_data_ref_t* ref;
+
+	ref = ssp_segbuf_add_i(segbuf, type, size, data);
+	ref->serialize_hook = hook;
+
+	return ref;
+}
+
+ssp_data_ref_t*
 ssp_segbuf_add_i(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data)
 {
 	ssp_data_ref_t* data_ref;
 
 	if ((data_ref = ssp_segbuf_add(segbuf, type, size, data)))
 		data_ref->important = true;
+
+	return data_ref;
 }
 
 void 

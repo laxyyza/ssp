@@ -15,12 +15,16 @@
 #define SSP_MORE 2
 #define SSP_NOT_USED -3
 
+typedef void (*ssp_serialize_hook_t)(void* dst, const void* src, u16 size);
+
 typedef struct 
 {
     u8 type;
     u16 size;
     const void* data;
 	bool important;
+
+	ssp_serialize_hook_t serialize_hook;
 } ssp_data_ref_t;
 
 typedef struct 
@@ -72,6 +76,7 @@ typedef struct
 
 	u32 out_total_packets;
 	u32 rto; // Retransmission timeout
+	f64 last_timestamp;
 } ssp_segbuf_t;
 
 typedef void (*ssp_segment_callback_t)(const ssp_segment_t*, void* user_data, void* source_data);
@@ -90,6 +95,7 @@ typedef struct
     void* user_data;
 	bool debug;
 	f64	 current_time;
+	f64	 last_packet_timestamp;
 	const char* (*segment_type_str)(u8 type);
 } ssp_ctx_t;
 
@@ -159,7 +165,9 @@ ssp_data_ref_t* ssp_segbuf_add(ssp_segbuf_t* segbuf, u8 type, u16 size, const vo
 /**
  *	'i' for "Important"
  */
-void ssp_segbuf_add_i(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data);
+ssp_data_ref_t* ssp_segbuf_add_i(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data);
+ssp_data_ref_t* ssp_segbuf_hook_add(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data, ssp_serialize_hook_t hook);
+ssp_data_ref_t* ssp_segbuf_hook_add_i(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data, ssp_serialize_hook_t hook);
 
 /**
  *	Calculate the total size of segbuf if serialized.
