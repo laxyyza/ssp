@@ -100,11 +100,15 @@ typedef struct ssp_header
  */
 #define SSP_SEGMENT_16BIT_PAYLOAD 0x80
 
+typedef struct ssp_packet ssp_packet_t;
+
 typedef struct ssp_segment
 {
     u8  type;
     u16 size;
 	u8* data;
+
+	const ssp_packet_t* packet;
 } ssp_segment_t;
 
 typedef struct ssp_footer

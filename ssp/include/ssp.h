@@ -79,7 +79,7 @@ typedef struct
 	f64 last_timestamp;
 } ssp_segbuf_t;
 
-typedef void (*ssp_segment_callback_t)(const ssp_segment_t*, void* user_data, void* source_data);
+typedef void (*ssp_segment_callback_t)(const ssp_segment_t* segment, void* user_data, void* source_data);
 
 // Return false if failed
 typedef bool (*ssp_session_verify_callback_t)(u32 session_id, 
@@ -95,7 +95,6 @@ typedef struct
     void* user_data;
 	bool debug;
 	f64	 current_time;
-	f64	 last_packet_timestamp;
 	const char* (*segment_type_str)(u8 type);
 } ssp_ctx_t;
 
@@ -199,7 +198,7 @@ void ssp_segbuf_destroy(ssp_segbuf_t* segbuf);
  *
  * `source_data` - Pointer to metadata containing information about the origin of the network buffer.
  */
-i32 ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* buf, u32 buf_size, void* source_data);
+i32 ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* buf, u32 buf_size, void* source_data, f64 timestamp_s);
 i32 ssp_parse_sliding_window(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* source_data);
 
 ssp_packet_t* ssp_segbuf_get_resend_packet(ssp_segbuf_t* segbuf, f64 current_time);

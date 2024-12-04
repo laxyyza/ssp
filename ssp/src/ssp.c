@@ -443,7 +443,8 @@ ssp_segbuf_hook_add(ssp_segbuf_t* segbuf, u8 type, u16 size, const void* data, s
 	ssp_data_ref_t* ref;
 
 	ref = ssp_segbuf_add(segbuf, type, size, data);
-	ref->serialize_hook = hook;
+	if (ref)
+		ref->serialize_hook = hook;
 
 	return ref;
 }
@@ -553,6 +554,7 @@ ssp_parse_payload(ssp_ctx_t* ctx, const ssp_packet_t* packet, void* source_data)
 
 		segment.type = segment_buf[0];
 		segment.data = segment_buf + segment_data_offset;
+		segment.packet = packet;
 
         if ((segment_callback = ssp_get_segment_callback(ctx, segment.type)))
         {
@@ -821,7 +823,7 @@ ssp_parse_sliding_window(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* source_data
 }
 
 i32
-ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* buf, u32 buf_size, void* source_data)
+ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* buf, u32 buf_size, void* source_data, f64 timestamp_s)
 {
 	i32 ret = SSP_SUCCESS;
 	enum ssp_parse_status status;
@@ -841,7 +843,7 @@ ssp_parse_buf(ssp_ctx_t* ctx, ssp_segbuf_t* segbuf, void* buf, u32 buf_size, voi
 	}
 
 	packet = calloc(1, sizeof(ssp_packet_t));
-	packet->timestamp = ctx->current_time;
+	packet->timestamp = timestamp_s;
 	status = ssp_parse_header(packet, ctx, &segbuf, buf, buf_size, &source_data);
 
 	switch (status)
