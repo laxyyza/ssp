@@ -40,6 +40,7 @@ typedef struct ssp_tcp_sock
     sock_t sockfd;
     ssp_addr_t addr;
     char ipstr[INET6_ADDRSTRLEN];
+	i32  send_flags;
     bool connected;
 } ssp_tcp_sock_t;
 

@@ -141,7 +141,7 @@ ssp_tcp_send(ssp_tcp_sock_t* sock, const ssp_packet_t* packet)
     if (packet == NULL)
         return -1;
 
-    if ((ret = send(sock->sockfd, packet->buf, packet->size, 0)) == -1)
+    if ((ret = send(sock->sockfd, packet->buf, packet->size, sock->send_flags)) == -1)
         perror("send");
 
     return ret;
