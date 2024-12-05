@@ -116,15 +116,15 @@ ssp_tcp_sock_close(ssp_tcp_sock_t* sock)
 }
 
 i32 
-ssp_tcp_send_segbuf(ssp_tcp_sock_t* sock, ssp_segbuf_t* segbuf)
+ssp_tcp_send_io(ssp_tcp_sock_t* sock, ssp_io_t* io)
 {
-	if (segbuf == NULL)
+	if (io == NULL)
 		return -1;
 
 	i32 ret;
 	ssp_packet_t* packet;
 
-	packet = ssp_serialize_packet(segbuf);
+	packet = ssp_io_serialize(io);
 	if (packet == NULL)
 		return -1;
 

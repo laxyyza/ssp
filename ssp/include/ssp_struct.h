@@ -56,6 +56,24 @@
 #define SSP_16_BIT_PAYLOAD_BIT		0x08
 #define SSP_ACK_BIT					0x04
 
+/**	
+ *	User-settable flags. These flags can be enabled or disabled by 
+ *	the users/applications using SSP to control specific protocol features.
+ **/
+#define SSP_USER_FLAGS	(SSP_FOOTER_BIT | SSP_SESSION_BIT | SSP_IMPORTANT_BIT | SSP_ZSTD_COMPRESSION_BIT)
+
+/**
+ *	Protocol-settable flags. These flags can only be set by the protocol 
+ *	based on internal conditions and are not directly controlled by the user.
+ **/
+#define SSP_INTERNAL_FLAGS (SSP_16_BIT_PAYLOAD_BIT | SSP_ACK_BIT)
+
+/**
+ *	User and protocol-settable flags. These flags can be set by both 
+ *	the user and the protocol, depending on the use case or specific conditions.
+ **/
+#define SSP_HYBRID_FLAGS (SSP_IMPORTANT_BIT | SSP_ZSTD_COMPRESSION_BIT)
+
 /**
  * Header structure:
  *
