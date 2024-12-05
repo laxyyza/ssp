@@ -7,17 +7,17 @@
 #include "ssp_ring.h"
 
 #define SSP_DEFAULT_TX_TIMEOUT 250.0
-#define MAX_SEGMENT_TYPES 128
+#define MAX_SEGMENT_TYPES 127
 #define MAX_SEGMENT_COUNT UINT8_MAX
 
 #define _SSP_UNUSED __attribute__((unused))
 
+#define SSP_MORE 2
 #define SSP_BUFFERED 3
 #define SSP_CALLBACK_NOT_ASSIGN 1
 #define SSP_SUCCESS 0
 #define SSP_FAILED -1
 #define SSP_INCOMPLETE -2
-#define SSP_MORE 2
 #define SSP_NOT_USED -3
 
 typedef void (*ssp_copy_hook_t)(void* dst, const void* src, u16 size);
@@ -172,80 +172,141 @@ typedef struct
 	f64			timestamp_s;	// Timestamp of the packet.
 } ssp_io_process_params_t;
 
+/**
+ * Initialize the SSP I/O Context.
+ * This function sets up a shared/common resource that will be used 
+ * by multiple `ssp_io` instances. It provides the necessary 
+ * initialization for the context, including setting a magic identifier 
+ * and associating application-specific data.
+ */
 void ssp_io_ctx_init(ssp_io_ctx_t* ctx, u32 magic, void* user_data);
+
+/**
+ * Register a callback function for a custom segment type.
+ * This allows the application to define custom segment types and 
+ * associate them with a handler. The maximum number of segment types 
+ * that can be registered is 127 (due to the 7-bit limit).
+ */
 void ssp_io_ctx_register_dispatch(ssp_io_ctx_t* ctx, u8 type, ssp_segment_callback_t callback);
 
+/**
+ * Initialize an `ssp_io` instance.
+ * This function initializes an `ssp_io` structure, associating it with 
+ * a given SSP I/O context and setting the default transmission flags 
+ * for the instance.
+ */
 void ssp_io_init(ssp_io_t* io, ssp_io_ctx_t* ctx, u8 flags);
+
 
 u32 ssp_checksum32(const void* data, u64 size);
 
 /**
- *  Calculate Packet Size based on payload size and flags.
- */
-u32 ssp_calc_psize(u32 payload_size, u32* header_size_p, u32* opt_data_offset, u8 flags);
-
-/** 
- *  Segment size. Segment header + Segment's Data
- */
-u32 ssp_seg_size(const ssp_segment_t* seg);
-
-/**
- * Serializes a packet from the `io`.
- * Returns a pointer to an `ssp_packet_t` structure allocated on the heap,
- * ready for transmission over the network.
- * The returned packet should be freed using `ssp_packet_free()`
+ * Serializes a packet from the `io->tx.ref_ring` buffer.
  *
- * If `io->count` is zero, returns NULL.
+ * If the `ref_ring` is empty, NULL is returned. Otherwise, a serialized packet is 
+ * created and returned, ready for transmission over the network. The serialized 
+ * buffer is stored in `ssp_packet_t->buf`, and its size is in `ssp_packet_t->size`.
+ *
+ * Once the packet is no longer needed, the application should call `ssp_packet_free()` 
+ * to free the memory associated with it.
  */
 ssp_packet_t* ssp_io_serialize(ssp_io_t* io);
 
-
+/** 
+ * Frees a SSP packet. If the packet has the `SSP_IMPORTANT_BIT` flag set, it will not be freed 
+ * to ensure it can be acknowledged and retransmitted if necessary.
+ * 
+ * Important packets should be managed automatically by `ssp_io_find_expired_packet()`, 
+ * so manual intervention is not required for these packets.
+ *
+ * The application should always call `ssp_packet_free()` after sending it.
+ */
 void ssp_packet_free(ssp_packet_t* packet);
 
-/**
- *  Appends a pointer to data, along with its type and size, to the segment buffer.
+/** 
+ * - `ssp_io_push_ref()`
+ *	Pushes a data reference (type, size, and void* data) into the 
+ *	`io->tx.ref_ring` buffer for later serialization using `ssp_io_serialize()`.
  *
- *  NOTE: The data must remain valid (i.e., not freed, or go out of scope) 
- *        from the time it is added to the buffer until the call to `ssp_serialize_packet()`.
+ *	NOTE: The `data` pointer must remain valid from the time it is pushed until it is serialized
+ *	using `ssp_io_serialize()`. This function does not copy the data, it only holds a reference to it.
+ *
+ *	The `io->tx.ref_ring` buffer has a maximum size of `UINT8_MAX` (255) data references (limited by the 
+ *	SSP protocol's maximum segment count), if the number of references exceeds this size, older data 
+ *	references will be overwritten. It is the responsibility of the application to ensure that important
+ *	references are not overwritten if they need to be preserved.
  */
 ssp_data_ref_t* ssp_io_push_ref(ssp_io_t* io, u8 type, u16 size, const void* data);
 
-/**
- *	'i' for "Important"
+/**	
+ * - `ssp_io_push_ref_i`
+ *	Exact same as `ssp_io_push_ref()` but marks data reference as "Important".
+ *
+ *	Identical to `ssp_io_push_ref()` but marks the data reference as "Important",
+ *	which causes the next call to `ssp_io_serialize()` to set the `SSP_IMPORTANT_BIT` flag
+ *	in the resulting packet.
  */
 ssp_data_ref_t* ssp_io_push_ref_i(ssp_io_t* io, u8 type, u16 size, const void* data);
-ssp_data_ref_t* ssp_io_hook_push_ref(ssp_io_t* io, u8 type, u16 size, const void* data, ssp_copy_hook_t copy_hook);
-ssp_data_ref_t* ssp_io_hook_push_ref_i(ssp_io_t* io, u8 type, u16 size, const void* data, ssp_copy_hook_t copy_hook);
+
+/** 
+ * - `ssp_io_push_hook_ref()`
+ *	Identical to `ssp_io_push_ref()` but allows for a custom callback function 
+ *	(`copy_hook`) to be provided for handling data copying. 
+ *	This allows custom copying behavior during serialization.
+ */
+ssp_data_ref_t* ssp_io_push_hook_ref(ssp_io_t* io, u8 type, u16 size, const void* data, ssp_copy_hook_t copy_hook);
 
 /**
- *	Calculate the total size of io if serialized.
+ * - `ssp_io_push_hook_ref_i()`
+ *	Combines the behavior of `ssp_io_push_hook_ref()` and `ssp_io_push_ref_i()`.
  */
-u32  ssp_io_serialized_size(const ssp_io_t* io, u8* flags);
+ssp_data_ref_t* ssp_io_push_hook_ref_i(ssp_io_t* io, u8 type, u16 size, const void* data, ssp_copy_hook_t copy_hook);
 
-void ssp_io_tx_reset(ssp_io_t* io);
+/**
+ * Calculate the total size of the payload based on the `ssp_io`'s `ref_ring` buffer.
+ * This function computes the size of all data references currently in the `ref_ring`,
+ * which are queued for serialization and transmission.
+ */
+u32  ssp_io_ref_ring_size(const ssp_io_t* io);
 
+/**
+ * Deinitialize the `ssp_io` instance.
+ * This function cleans up any resources used by the `ssp_io` structure, 
+ * ensuring that any dynamically allocated memory is freed.
+ */
 void ssp_io_deinit(ssp_io_t* io);
 
 /**
  * Parses an arbitrary buffer containing received network data,
- * and invokes the appropriate segment-map callbacks.
+ * processes it, and invokes the appropriate type-dispatch callbacks.
  *
- * Returns 0 (SSP_SUCCESS) on success when all segments have assigned callbacks.
- * Returns 1 (SSP_SEGMAP_NO_ASSIGN) if successful but at least one segment did 
- *  not have a callback assigned.
- * Returns -1 (SSP_FAILED) if the data is invalid.
- * Returns -2 (SSP_INCOMPLETE) if packet is incomplete.
- * Returns -3 (SSP_NOT_USED) if all segments did not have a callback assigned.
- * Returns 2 (SSP_MORE) if the buffer size is larger than the packet size, indicating
- * that there might be additional data or another packet in the buffer 
- * (e.g., in stream-based protocols like TCP).
- *
- * `source_data` - Pointer to metadata containing information about the origin of the network buffer.
+ * Returns:
+ *  0 (SSP_SUCCESS) - Success: All segments have assigned callbacks.
+ *  1 (SSP_SEGMAP_NO_ASSIGN) - Success: At least one segment did not have a callback assigned.
+ *  2 (SSP_MORE) - More data: The buffer size exceeds the packet size, indicating that there might be additional data
+ *    or another packet in the buffer (e.g., in stream-based protocols like TCP).
+ *  3 (SSP_BUFFERED) - Buffered: The packet was buffered and may or may not be processed.
+ * -1 (SSP_FAILED) - Failure: The data is invalid.
+ * -2 (SSP_INCOMPLETE) - Incomplete: The packet is incomplete.
+ * -3 (SSP_NOT_USED) - Not used: All segments did not have a callback assigned.
  */
 i32 ssp_io_process(ssp_io_process_params_t* params);
-i32 ssp_parse_sliding_window(ssp_io_ctx_t* ctx, ssp_io_t* io, void* source_data);
 
+/**
+ * Processes buffered packets in the sliding window, if they are properly aligned or the timeout has expired.
+ */
+i32 ssp_io_process_window(ssp_io_t* io, void* source_data);
+
+/**
+ * Checks the important pending packets. If the timeout has expired, the packet will be returned 
+ * to be retransmitted.
+ */
 ssp_packet_t* ssp_io_find_expired_packet(ssp_io_t* io, f64 current_time);
+
+/**
+ * Sets the round-trip time (RTT) between the application and peer.
+ * This will adjust the timeouts accordingly.
+ */
 void ssp_io_set_rtt(ssp_io_t* io, f32 rtt_ms);
 
-#endif // _SSP_H_
+#endif // _SSP_H

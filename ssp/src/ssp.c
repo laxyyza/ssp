@@ -149,8 +149,8 @@ ssp_checksum32(const void* data, u64 size)
     return checksum;
 }
 
-u32 
-ssp_io_serialized_size(const ssp_io_t* io, u8* flags)
+static u32 
+ssp_io_ref_ring_size_f(const ssp_io_t* io, u8* flags)
 {
     u32 total = 0;
 	u32 count = 0;
@@ -174,6 +174,12 @@ ssp_io_serialized_size(const ssp_io_t* io, u8* flags)
 		*flags ^= SSP_IMPORTANT_BIT;
 
     return total;
+}
+
+u32 
+ssp_io_ref_ring_size(const ssp_io_t* io)
+{
+	return ssp_io_ref_ring_size_f(io, NULL);
 }
 
 static void
@@ -318,7 +324,7 @@ ssp_io_serialize(ssp_io_t* io)
 	if (io->rx.acks.min >= 0)
 		packet_flags |= SSP_ACK_BIT;
 
-    payload_size = ssp_io_serialized_size(io, &packet_flags);
+    payload_size = ssp_io_ref_ring_size_f(io, &packet_flags);
     packet = ssp_new_packet(io->ctx, payload_size, packet_flags);
 
     ssp_serialize(packet, io);
@@ -417,7 +423,7 @@ ssp_io_push_hook_ref_i(ssp_io_t* io, u8 type, u16 size, const void* data, ssp_co
 	return ref;
 }
 
-void 
+static void 
 ssp_io_tx_reset(ssp_io_t* io)
 {
 	if (io == NULL)
@@ -752,14 +758,14 @@ ssp_parse_header(ssp_packet_t* packet, ssp_io_ctx_t* ctx, ssp_io_t** io, void* b
 }
 
 i32
-ssp_parse_sliding_window(ssp_io_ctx_t* ctx, ssp_io_t* io, void* source_data)
+ssp_io_process_window(ssp_io_t* io, void* source_data)
 {
 	i32 ret = SSP_SUCCESS;
 	const ssp_packet_t* packet;
 
-	while ((packet = ssp_window_get_packet(&io->rx.window, ctx->current_time)))
+	while ((packet = ssp_window_get_packet(&io->rx.window, io->ctx->current_time)))
 	{
-		ret = ssp_parse_payload(ctx, packet, source_data);
+		ret = ssp_parse_payload(io->ctx, packet, source_data);
 
 		packet->header->flags ^= SSP_IMPORTANT_BIT;
 		ssp_packet_free((void*)packet);
@@ -804,7 +810,7 @@ ssp_io_process(ssp_io_process_params_t* params)
 			break;
 		case SSP_PARSE_BUFFERED:
 		{
-			ssp_parse_sliding_window(ctx, io, params->peer_data);
+			ssp_io_process_window(io, params->peer_data);
 			ret = SSP_BUFFERED;
 			break;
 		}
