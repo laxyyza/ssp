@@ -311,6 +311,15 @@ ssp_serialize(ssp_packet_t* packet, ssp_io_t* io)
 	ssp_serialize_payload(packet, io);
 }
 
+static void 
+ssp_io_tx_reset(ssp_io_t* io)
+{
+	if (io == NULL)
+        return;
+
+	ssp_ring_reset(&io->tx.ref_ring);
+}
+
 ssp_packet_t* 
 ssp_io_serialize(ssp_io_t* io)
 {
@@ -421,15 +430,6 @@ ssp_io_push_hook_ref_i(ssp_io_t* io, u8 type, u16 size, const void* data, ssp_co
 		ref->copy = hook;
 
 	return ref;
-}
-
-static void 
-ssp_io_tx_reset(ssp_io_t* io)
-{
-	if (io == NULL)
-        return;
-
-	ssp_ring_reset(&io->tx.ref_ring);
 }
 
 static void
@@ -779,6 +779,8 @@ ssp_io_process(ssp_io_process_params_t* params)
 {
 	ssp_io_ctx_t* ctx = params->ctx;
 	ssp_io_t* io = params->io;
+	if (io && ctx == NULL)
+		ctx = io->ctx;
 	void* buf = params->buf;
 	u32   buf_size = params->size;
 
