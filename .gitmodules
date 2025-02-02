@@ -1,3 +1,6 @@
 [submodule "ssp/lib/ght"]
 	path = ssp/lib/ght
 	url = git@github.com:laxyy69/ght.git
+[submodule "ssp/lib/cutils"]
+	path = ssp/lib/cutils
+	url = git@github.com:laxyyza/cutils.git

@@ -15,7 +15,8 @@ libssp = library('ssp', ssp_src,
         cutils_include,
     ],
     link_with: [
-        libght
+        libght,
+        libcutils
     ],
     dependencies: [zstd_dep]
 )
