@@ -30,7 +30,11 @@ _libssp.ssp_io_ctx_register_dispatch.argtypes = [
 _libssp.ssp_io_ctx_register_dispatch.restype = None
 
 def ssp_io_ctx_register_dispatch(ctx: _SSPCtx, type: int, callback) -> None:
-    _libssp.ssp_io_ctx_register_dispatch(ctypes.pointer(ctx), type, callback)
+    _libssp.ssp_io_ctx_register_dispatch(
+        ctypes.pointer(ctx), 
+        type, 
+        SEGMENT_CALLBACK_TYPE(callback)
+    )
 
 #
 # void ssp_io_init(io, ctx, flags)
@@ -73,13 +77,13 @@ def ssp_io_push_ref(io: _SSPIo, type: int, size: int, data) -> _SSPDataRef:
 #
 # ssp_data_ref_t* ssp_io_push_ref_i(io, type, size, data)
 #
-_libssp.ssp_io_push_ref.argtypes = [
+_libssp.ssp_io_push_ref_i.argtypes = [
     ctypes.POINTER(_SSPIo),
     ctypes.c_uint8,
     ctypes.c_uint16,
     ctypes.c_voidp
 ]
-_libssp.ssp_io_push_ref.restype = ctypes.POINTER(_SSPDataRef)
+_libssp.ssp_io_push_ref_i.restype = ctypes.POINTER(_SSPDataRef)
 
 def ssp_io_push_ref_i(io: _SSPIo, type: int, size: int, data) -> _SSPDataRef:
     return _libssp.ssp_io_push_ref_i(ctypes.pointer(io), type, size, data)
@@ -105,6 +109,17 @@ _libssp.ssp_packet_free.restype = None
 
 def ssp_packet_free(packet: _SSPPacket) -> None:
     _libssp.ssp_packet_free(packet)
+
+#
+# ssp_io_process(params)
+#
+_libssp.ssp_io_process.argtypes = [
+    ctypes.POINTER(_SSPIoProcessParams)
+]
+_libssp.ssp_io_process.restype = ctypes.c_int32
+
+def ssp_io_process(params: _SSPIoProcessParams) -> int:
+    return _libssp.ssp_io_process(params)
 
 #
 # Explain:

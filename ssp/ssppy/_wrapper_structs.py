@@ -8,6 +8,7 @@ __all__ = [
     "_SSPFooter", 
     "_SSPDataRef", 
     "_SSPHeader", 
+    "_SSPIoProcessParams", 
     "SEGMENT_CALLBACK_TYPE", 
 ]
 
@@ -76,6 +77,16 @@ class _SSPDataRef(ctypes.Structure):
         ("data", ctypes.c_voidp),
         ("important", ctypes.c_bool),
         ("copy", ctypes.c_voidp) # Callback function pointer
+    ]
+
+class _SSPIoProcessParams(ctypes.Structure):
+    _fields_ = [
+        ("ctx", ctypes.POINTER(_SSPCtx)),
+        ("io", ctypes.POINTER(_SSPIo)),
+        ("buf", ctypes.c_voidp),
+        ("size", ctypes.c_uint32),
+        ("peer_data", ctypes.c_voidp),
+        ("timestamp_s", ctypes.c_double),
     ]
 
 SEGMENT_CALLBACK_TYPE = ctypes.CFUNCTYPE(
