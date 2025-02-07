@@ -29,11 +29,11 @@ _libssp.ssp_io_ctx_register_dispatch.argtypes = [
 ]
 _libssp.ssp_io_ctx_register_dispatch.restype = None
 
-def ssp_io_ctx_register_dispatch(ctx: _SSPCtx, type: int, callback) -> None:
+def ssp_io_ctx_register_dispatch(ctx: _SSPCtx, type: int, callback: ctypes.CFUNCTYPE) -> None:
     _libssp.ssp_io_ctx_register_dispatch(
         ctypes.pointer(ctx), 
         type, 
-        SEGMENT_CALLBACK_TYPE(callback)
+        callback
     )
 
 #

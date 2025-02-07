@@ -12,6 +12,7 @@ class SSPCtx:
     def __init__(self, magic=0):
         self._struct = ssp._SSPCtx()
         ssp.ssp_io_ctx_init(self._struct, magic)
+        self.dispatch_table: dict[int, callable] = {}
     
     def set_magic(self, magic: int) -> None:
         self._struct.magic = magic
@@ -20,7 +21,8 @@ class SSPCtx:
         return SSPIo(self)
     
     def register_dispatch(self, type: int, callback) -> None:
-        ssp.ssp_io_ctx_register_dispatch(self._struct, type, callback)
+        self.dispatch_table[type] = ssp.SEGMENT_CALLBACK_TYPE(callback)
+        ssp.ssp_io_ctx_register_dispatch(self._struct, type, self.dispatch_table[type])
 
 class SSPDataRef:
     def __init__(self, data_ref: ssp._SSPDataRef):
@@ -94,4 +96,3 @@ class SSPIoProcessParams:
     
     def process(self):
         ret = ssp.ssp_io_process(self._struct)
-        print("ret: ", ret)
