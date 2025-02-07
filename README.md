@@ -1,6 +1,6 @@
 # SSP - Simple Segmented Protocol 
 
-SSP is a dynamic, application-level binary protocol designed to work over both TCP and UDP. Its payload is divided into 'segments,' allowing multiple types of data to be transmitted within a single packet. For example, a single game packet could include a player's position, input, events, and more.
+SSP is a dynamic, application-level, application-specific binary protocol designed to work over both TCP and UDP. Its payload is divided into 'segments,' allowing multiple types of data to be transmitted within a single packet. For example, a single game packet could include a player's position, input, events, and more. SSP also features reordering capabilities to handle out-of-order packets, retransmission mechanisms for loss recovery, and compression to optimize bandwidth usage, making it highly efficient for real-time applications like gaming.
 
 This project encompasses the protocol's structure, its implementation, and a C-based network library. The library is designed to buffer multiple data segments before serializing them into a single packet for transmission.
 
