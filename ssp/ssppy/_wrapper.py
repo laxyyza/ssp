@@ -120,28 +120,3 @@ _libssp.ssp_io_process.restype = ctypes.c_int32
 
 def ssp_io_process(params: _SSPIoProcessParams) -> int:
     return _libssp.ssp_io_process(params)
-
-#
-# Explain:
-#
-
-# ssp_ctx = SSPCtx()
-# _libssp.ssp_io_ctx_init(ctypes.pointer(ssp_ctx), 0x69696969, None)
-#
-# ssp_io = SSPIo()
-# _libssp.ssp_io_init(ctypes.pointer(ssp_io), ctypes.pointer(ssp_ctx), 0)
-#
-# msg = ctypes.create_string_buffer(32)
-# msg.value = b"hello from python! :3"
-#
-# _libssp.ssp_io_push_ref(ctypes.pointer(ssp_io), 0x69, len(msg.value), ctypes.cast(msg, ctypes.c_void_p))
-# _libssp.ssp_io_push_ref(ctypes.pointer(ssp_io), 0x11, len(msg.value), ctypes.cast(msg, ctypes.c_void_p))
-#
-# ssp_packet = _libssp.ssp_io_serialize(ctypes.pointer(ssp_io))
-#
-# sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# sock.connect(("127.0.0.1", 49420))
-#
-# packet_bytes = ctypes.string_at(ssp_packet.contents.buf, ssp_packet.contents.size)
-#
-# sock.send(packet_bytes)
