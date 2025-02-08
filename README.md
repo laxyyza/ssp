@@ -74,3 +74,6 @@ The footer contains a checksum of the packet for integrity verification. It is o
 - Networking functionality is still under development:
     - Basic support for TCP sockets is implemented.
     - No support for UDP sockets has been implemented yet.
+
+## Projects Using SSP
+- [wa_game](https://github.com/laxyyza/wa_game): A straightforward top-down 2D multiplayer game where players engage in combat by shooting each other.
