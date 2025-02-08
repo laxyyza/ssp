@@ -11,18 +11,15 @@ SERVER_PORT = 49421
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-NET_MSG=1
-
-# TODO: Implement callback and process.
-def net_msg(io: SSPIo, data: bytes, user_data) -> None:
-    pass
+NET_MSG = 1
+NET_ERROR = 2
 
 ssp_ctx = SSPCtx(0x69696969)
 #ssp_ctx.register_dispatch(NET_MSG, )
 ssp_io = ssp_ctx.create_io()
 
 ssp_io.push("Ok", segment_type=1)
-ssp_io.push("Hello", segment_type=1)
+ssp_io.push("Hello", segment_type=2)
 
 packet = ssp_io.serialize()
 

@@ -29,8 +29,16 @@ def _dispatch_callback(segment: ssp._SSPSegment, p_user_data: ctypes.c_void_p, p
     ctx = voidp_to_pyobj(p_user_data)
     source_data = voidp_to_pyobj(p_source_data)
     data = ctypes.string_at(segment.contents.data, segment.contents.size)
+    packet: SSPPacket = SSPPacket(segment.contents.packet.contents)
 
-    ctx.dispatch_table[segment.contents.type](data, ctx=ctx, source_data=source_data)
+    ctx.dispatch_table[segment.contents.type](
+        data, 
+        ctx=ctx, 
+        source_data=source_data,
+        packet=packet,
+        segment_type=segment.contents.type,
+        size=segment.contents.size
+    )
 
 class SSPCtx:
     def __init__(self, magic=0):
@@ -114,11 +122,19 @@ class SSPIo:
         return packet
 
 class SSPPacket:
-    def __init__(self, io: SSPIo):
-        self._struct = ssp.ssp_io_serialize(io._struct)
+    def __init__(self, data: SSPIo|ssp._SSPPacket):
+        if type(data) is SSPIo:
+            self._struct = ssp.ssp_io_serialize(data._struct)
+            self.io = data
+        elif type(data) is ssp._SSPPacket:
+            self._struct = data
+            self.io = None
+        else:
+            raise TypeError(data)
     
     def __del__(self):
-        ssp.ssp_packet_free(self._struct)
+        if self.io:
+            ssp.ssp_packet_free(self._struct)
     
     def data(self) -> bytes:
         return ctypes.string_at(self._struct.contents.buf, self._struct.contents.size)
