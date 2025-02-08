@@ -20,9 +20,15 @@ class SSPCtx:
     def create_io(self) -> "SSPIo":
         return SSPIo(self)
     
-    def register_dispatch(self, type: int, callback) -> None:
-        self.dispatch_table[type] = ssp.SEGMENT_CALLBACK_TYPE(callback)
-        ssp.ssp_io_ctx_register_dispatch(self._struct, type, self.dispatch_table[type])
+    def register(self, type: int, callback=None):
+        def decorator(func):
+            self.dispatch_table[type] = ssp.SEGMENT_CALLBACK_TYPE(func)
+            ssp.ssp_io_ctx_register_dispatch(self._struct, type, self.dispatch_table[type])
+        if callback == None:
+            return decorator 
+        else:
+            decorator(callback)
+        
 
 class SSPDataRef:
     def __init__(self, data_ref: ssp._SSPDataRef):
