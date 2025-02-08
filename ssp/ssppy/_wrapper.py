@@ -16,8 +16,8 @@ _libssp.ssp_io_ctx_init.argtypes = [
 ]
 _libssp.ssp_io_ctx_init.restype = None
 
-def ssp_io_ctx_init(ctx: _SSPCtx, magic: int) -> None:
-    _libssp.ssp_io_ctx_init(ctypes.pointer(ctx), magic, None)
+def ssp_io_ctx_init(ctx: _SSPCtx, magic: int, user_data=None) -> None:
+    _libssp.ssp_io_ctx_init(ctypes.pointer(ctx), magic, user_data)
 
 #
 # void ssp_io_ctx_register_dispatch(ctx, type, callback)

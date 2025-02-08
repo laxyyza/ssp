@@ -18,10 +18,9 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind((HOST, PORT))
 
 @ssp_ctx.register(NET_MSG)
-def net_msg(segmentp: ssp._SSPSegment, user_data, source_data):
-    string = ctypes.string_at(segmentp.contents.data, segmentp.contents.size).decode()
-    print(f"Type:{segmentp.contents.type} -> '{string}'")
-
+def net_msg(data: bytearray, ctx, source_data):
+    string = data.decode()
+    print(f"-> '{string}'")
 
 print(f"Listening on {HOST}:{PORT}")
 

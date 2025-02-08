@@ -6,13 +6,40 @@ import ssppy._wrapper as ssp
 ssp_callbacktype = ctypes.CFUNCTYPE(None, ctypes.c_voidp, ctypes.c_voidp, ctypes.c_voidp)
 
 def ba_to_voidp(buffer: bytearray) -> ctypes.c_voidp:
-    return ctypes.cast(ctypes.pointer(ctypes.c_char.from_buffer(buffer)), ctypes.c_void_p).value
+    return ctypes.cast(
+        ctypes.pointer(ctypes.c_char.from_buffer(buffer)), 
+        ctypes.c_void_p
+    ).value
+
+def voidp_to_pyobj(voidp: ctypes.c_void_p) -> any:
+    if voidp is None:
+        return None
+    return ctypes.cast(
+        voidp,
+        ctypes.POINTER(ctypes.py_object)
+    ).contents.value
+
+def _dispatch_callback(segment: ssp._SSPSegment, p_user_data: ctypes.c_void_p, p_source_data: ctypes.c_void_p):
+    ctx = voidp_to_pyobj(p_user_data)
+    source_data = voidp_to_pyobj(p_source_data)
+    data = ctypes.string_at(segment.contents.data, segment.contents.size)
+
+    ctx.dispatch_table[segment.contents.type](data, ctx, source_data)
 
 class SSPCtx:
     def __init__(self, magic=0):
         self._struct = ssp._SSPCtx()
-        ssp.ssp_io_ctx_init(self._struct, magic)
+        self._struct.user_data
         self.dispatch_table: dict[int, callable] = {}
+        ssp.ssp_io_ctx_init(
+            self._struct, 
+            magic, 
+            ctypes.cast(
+                ctypes.pointer(ctypes.py_object(self)),
+                ctypes.c_void_p
+            )
+        )
+        self.dispatch = ssp.SEGMENT_CALLBACK_TYPE(_dispatch_callback)
     
     def set_magic(self, magic: int) -> None:
         self._struct.magic = magic
@@ -22,8 +49,12 @@ class SSPCtx:
     
     def register(self, type: int, callback=None):
         def decorator(func):
-            self.dispatch_table[type] = ssp.SEGMENT_CALLBACK_TYPE(func)
-            ssp.ssp_io_ctx_register_dispatch(self._struct, type, self.dispatch_table[type])
+            self.dispatch_table[type] = func
+            ssp.ssp_io_ctx_register_dispatch(
+                self._struct, 
+                type, 
+                self.dispatch
+            )
         if callback == None:
             return decorator 
         else:
