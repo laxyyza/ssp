@@ -3,26 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 
-void
-ssp_window_print(const ssp_window_t* win)
-{
-	printf("Window, read: %d, next_seq: %u, count: %u, timeout: %f\n", win->read_idx, win->next_seq, win->count, win->timeout_ms);
-
-	for (u32 i = 0; i < SSP_WINDOW_SIZE; i++)
-	{
-		const ssp_packet_t* p = win->window[i];
-		printf("%u: ", i);
-		if (p)
-		{
-			if (*p->opt_data.seq == win->next_seq)
-				printf("> ");
-			printf("\tsn: %u (%f)\n", *p->opt_data.seq, p->timestamp);
-		}
-		else
-			printf("\tNil\n");
-	}
-}
-
 void 
 ssp_window_init(ssp_window_t* win)
 {
