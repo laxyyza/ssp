@@ -18,9 +18,9 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind((HOST, PORT))
 
 @ssp_ctx.register(NET_MSG)
-def net_msg(data: bytearray, ctx, source_data):
+def net_msg(data: bytearray, source_data, **_):
     string = data.decode()
-    print(f"-> '{string}'")
+    print(f"Message from {source_data[0]}:{source_data[1]} - '{string}'")
 
 print(f"Listening on {HOST}:{PORT}")
 
@@ -28,5 +28,5 @@ while True:
     data, addr = sock.recvfrom(1024)   
     print(f"Recv {len(data)} bytes from {addr}:")
 
-    params = SSPIoProcessParams(ssp_ctx, ssp_io, data, len(data))
+    params = SSPIoProcessParams(ssp_ctx, ssp_io, data, peer_data=addr)
     params.process()

@@ -19,12 +19,18 @@ def voidp_to_pyobj(voidp: ctypes.c_void_p) -> any:
         ctypes.POINTER(ctypes.py_object)
     ).contents.value
 
+def pyobj_to_voidp(pyobj: object) -> ctypes.c_void_p:
+    return ctypes.cast(
+        ctypes.pointer(ctypes.py_object(pyobj)),
+        ctypes.c_void_p
+    )
+
 def _dispatch_callback(segment: ssp._SSPSegment, p_user_data: ctypes.c_void_p, p_source_data: ctypes.c_void_p):
     ctx = voidp_to_pyobj(p_user_data)
     source_data = voidp_to_pyobj(p_source_data)
     data = ctypes.string_at(segment.contents.data, segment.contents.size)
 
-    ctx.dispatch_table[segment.contents.type](data, ctx, source_data)
+    ctx.dispatch_table[segment.contents.type](data, ctx=ctx, source_data=source_data)
 
 class SSPCtx:
     def __init__(self, magic=0):
@@ -34,10 +40,7 @@ class SSPCtx:
         ssp.ssp_io_ctx_init(
             self._struct, 
             magic, 
-            ctypes.cast(
-                ctypes.pointer(ctypes.py_object(self)),
-                ctypes.c_void_p
-            )
+            pyobj_to_voidp(self)
         )
         self.dispatch = ssp.SEGMENT_CALLBACK_TYPE(_dispatch_callback)
     
@@ -60,7 +63,6 @@ class SSPCtx:
         else:
             decorator(callback)
         
-
 class SSPDataRef:
     def __init__(self, data_ref: ssp._SSPDataRef):
         self._struct = data_ref
@@ -122,14 +124,14 @@ class SSPPacket:
         return ctypes.string_at(self._struct.contents.buf, self._struct.contents.size)
 
 class SSPIoProcessParams:
-    def __init__(self, ctx: SSPCtx, io: SSPIo, buf: bytearray, size: int, peer_data=None, timestamp: float=0.0):
+    def __init__(self, ctx: SSPCtx, io: SSPIo, buf: bytearray, peer_data=None, timestamp: float=0.0):
         self._struct = ssp._SSPIoProcessParams()
         self._struct.ctx = ctypes.pointer(ctx._struct)
         self._struct.io = ctypes.pointer(io._struct)
         self._struct.buf = ba_to_voidp(bytearray(buf))
-        self._struct.size = ctypes.c_uint32(size)
-        #self._struct.peer_data = ctypes.pointer(peer_data)
-        #self._struct.timestamp_s = ctypes.c_double(timestamp)
+        self._struct.size = ctypes.c_uint32(len(buf))
+        self._struct.peer_data = pyobj_to_voidp(peer_data)
+        self._struct.timestamp_s = ctypes.c_double(timestamp)
     
-    def process(self):
-        ret = ssp.ssp_io_process(self._struct)
+    def process(self) -> int:
+        return ssp.ssp_io_process(self._struct)
