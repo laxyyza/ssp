@@ -1,7 +1,14 @@
 #tcp_client_src = files('tcp_client.c')
 #tcp_server_src = files('tcp_server.c')
-uft_client_src = files('udp_file_transfer/uft_client.c')
-uft_server_src = files('udp_file_transfer/uft_server.c')
+
+uft_client_src = files(
+    'udp_file_transfer/uft_client.c',
+    'udp_file_transfer/udp_common.c'
+)
+uft_server_src = files(
+    'udp_file_transfer/uft_server.c',
+    'udp_file_transfer/udp_common.c'
+)
 uft_include = include_directories('udp_file_transfer/')
 
 links = [libssp, libght, libcutils]

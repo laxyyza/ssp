@@ -1,6 +1,7 @@
 #ifndef _UDP_COMMON_H_
 #define _UDP_COMMON_H_
 
+#define _GNU_SOURCE
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -10,6 +11,10 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <sys/stat.h>
 
 #include <ssp.h>
 
@@ -19,13 +24,16 @@
 
 #define MAX_FILE_NAME 256
 #define MAX_FILE_PATH 1024
+#define ERROR_MSG_LEN 512
 #define FILE_CHUNK 1024
 
 enum segment_types 
 {
 	UFT_CONNECT,
-	UFT_SRC_FILE,
-	UFT_DST_FILE,
+	UFT_UPLOAD,
+	UFT_DOWNLOAD,
+	UFT_OK,
+	UFT_ERROR,
 	UFT_SESSION,
 	UFT_FILE_DATA
 };
@@ -43,20 +51,24 @@ typedef struct
 
 typedef struct 
 {
-	u8		src; // src from client or server?
-	u64		filesize;
-	char	path[];
-} uft_src_file_t;
-
-typedef struct 
-{
-	char path[MAX_FILE_PATH];
-} uft_dst_file_t;
+	u64	 file_size;
+	u16  path_len;
+	char path[];
+} uft_upload_t;
 
 typedef struct 
 {
 	u32 session_id;
 } uft_session_t;
+
+typedef struct 
+{
+	i32 code;
+	char msg[ERROR_MSG_LEN];
+} uft_error_t;
+
+i32 file_exists(const char* path, bool create);
+u64 file_size(i32 fd);
 
 #endif // _UDP_COMMON_H_
 

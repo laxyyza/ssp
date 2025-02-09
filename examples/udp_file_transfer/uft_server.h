@@ -11,6 +11,8 @@ typedef struct
 	uft_addr_t addr;
 	ssp_io_t io;
 	bool connected;
+
+	i32 file_fd;
 } client_t;
 
 typedef struct 

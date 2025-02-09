@@ -71,6 +71,38 @@ uft_server_verify(u32 session_id, uft_server_t* server, const uft_addr_t* addr, 
 	return true;
 }
 
+static void 
+uft_upload(const ssp_segment_t* segment, uft_server_t* server, client_t* client)
+{
+	const uft_upload_t* upload = (const void*)segment->data;
+
+	printf("path: %s\n", upload->path);
+
+	i32 fd = file_exists(upload->path, true);
+	if (fd == -1)
+	{
+		uft_error_t* error = mmframes_zalloc(&server->mmf, sizeof(uft_error_t));
+		error->code = errno;
+		snprintf(error->msg, ERROR_MSG_LEN, "'%s': %s", upload->path, strerror(error->code));
+
+		ssp_io_push_ref(&client->io, UFT_ERROR, sizeof(uft_error_t), error);
+	}
+	else
+	{
+		ssp_io_push_ref(&client->io, UFT_OK, 0, NULL);
+		client->file_fd = fd;
+	}
+}
+
+static void 
+uft_file_data(const ssp_segment_t* segment, _SSP_UNUSED uft_server_t* server, client_t* client)
+{
+	if (write(client->file_fd, segment->data, segment->size) == -1)
+	{
+		perror("write");
+	}
+}
+
 static i32 
 uft_server_init(uft_server_t* server)
 {
@@ -107,6 +139,8 @@ uft_server_init(uft_server_t* server)
 
 	ssp_io_ctx_register_dispatch(&server->ssp_ctx, UFT_CONNECT, (ssp_segment_callback_t)server_accept);
 	ssp_io_ctx_register_dispatch(&server->ssp_ctx, UFT_SESSION, (ssp_segment_callback_t)uft_session);
+	ssp_io_ctx_register_dispatch(&server->ssp_ctx, UFT_UPLOAD, (ssp_segment_callback_t)uft_upload);
+	ssp_io_ctx_register_dispatch(&server->ssp_ctx, UFT_FILE_DATA, (ssp_segment_callback_t)uft_file_data);
 
     return 0;
 }
