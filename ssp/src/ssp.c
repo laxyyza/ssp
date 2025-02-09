@@ -376,7 +376,14 @@ ssp_io_init(ssp_io_t* io, ssp_io_ctx_t* ctx, u8 flags)
 	array_init(&io->tx.pending, sizeof(ssp_packet_t**), 10);
 
 	io->rx.acks.min = io->rx.acks.max = -1;
+	io->rx.required_flags = 0;
 	ssp_window_init(&io->rx.window);
+}
+
+void 
+ssp_io_required_flags(ssp_io_t* io, u8 required_flags)
+{
+	io->rx.required_flags = required_flags & SSP_USER_FLAGS;
 }
 
 ssp_data_ref_t*
@@ -720,6 +727,9 @@ ssp_parse_opt_data(ssp_packet_t* packet, ssp_io_ctx_t* ctx, ssp_io_t** io, void*
 		if (ssp_handle_session_id(packet, ctx, io, source_data) != SSP_SUCCESS)
 			return SSP_PARSE_FAILED;
 	}
+
+	if ((packet->header->flags & (*io)->rx.required_flags) != (*io)->rx.required_flags)
+		return SSP_PARSE_FAILED;
 
 	if (packet->opt_data.seq)
 	{

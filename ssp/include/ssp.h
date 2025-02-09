@@ -197,6 +197,14 @@ void ssp_io_ctx_register_dispatch(ssp_io_ctx_t* ctx, u8 type, ssp_segment_callba
  */
 void ssp_io_init(ssp_io_t* io, ssp_io_ctx_t* ctx, u8 flags);
 
+/**
+ *  Set the required flags for received packets in the IO.
+ *  Any packet that does not contain the required flags will be dropped.
+ *  
+ *  For example, if SSP_SESSION_BIT is required over UDP and a packet  
+ *  arrives without it, that packet will be discarded.
+ */
+void ssp_io_required_flags(ssp_io_t* io, u8 required_flags);
 
 u32 ssp_checksum32(const void* data, u64 size);
 
