@@ -7,7 +7,8 @@ void
 ssp_window_init(ssp_window_t* win)
 {
 	win->timeout_ms = SSP_WINDOW_TIMEOUT_MARGIN_MS;
-	win->next_seq = 1; }
+	win->next_seq = 0; 
+}
 
 void
 ssp_window_add_packet(ssp_window_t* win, ssp_packet_t* packet)

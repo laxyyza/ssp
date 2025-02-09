@@ -208,7 +208,7 @@ ssp_serialize_header(ssp_packet_t* packet, ssp_io_t* io)
 	if (packet->header->flags & SSP_IMPORTANT_BIT)
 	{
 		packet->opt_data.seq = packet->opt_data.buf + offset;
-		*packet->opt_data.seq = ++io->tx.seqc;
+		*packet->opt_data.seq = io->tx.seqc++;
 		offset += sizeof(u16);
 	}
 
@@ -486,6 +486,9 @@ ssp_parse_payload(ssp_io_ctx_t* ctx, const ssp_packet_t* packet, void* source_da
     ssp_segment_callback_t segment_callback;
     bool segment_called = false;
 
+	if (packet->header->segment_count == 0)
+		return SSP_SUCCESS;
+
 	if (packet->header->flags & SSP_ZSTD_COMPRESSION_BIT)
 	{
 		u32 og_size = ZSTD_getFrameContentSize(packet->payload, packet->payload_size);
@@ -691,7 +694,7 @@ ssp_handle_seqc(ssp_packet_t* packet, ssp_io_t* io)
 		if (new_seq > io->rx.acks.max)
 			io->rx.acks.max = new_seq;
 	}
-	else
+	else if (*packet->opt_data.seq != 0)
 		return SSP_PARSE_FAILED;	// We cant send ACK if no io.
 	
 	return ret;
@@ -734,7 +737,7 @@ ssp_parse_opt_data(ssp_packet_t* packet, ssp_io_ctx_t* ctx, ssp_io_t** io, void*
 			return SSP_PARSE_FAILED;
 	}
 
-	if ((packet->header->flags & (*io)->rx.required_flags) != (*io)->rx.required_flags)
+	if (*io && (packet->header->flags & (*io)->rx.required_flags) != (*io)->rx.required_flags)
 		return SSP_PARSE_FAILED;
 
 	if (packet->opt_data.seq)
@@ -776,7 +779,7 @@ ssp_parse_header(ssp_packet_t* packet, ssp_io_ctx_t* ctx, ssp_io_t** io, void* b
 i32
 ssp_io_process_window(ssp_io_t* io, void* source_data)
 {
-	i32 ret = SSP_SUCCESS;
+	i32 ret = SSP_BUFFERED;
 	const ssp_packet_t* packet;
 
 	while ((packet = ssp_window_get_packet(&io->rx.window, io->ctx->current_time)))
@@ -827,11 +830,8 @@ ssp_io_process(ssp_io_process_params_t* params)
 			ret = ssp_parse_payload(ctx, packet, params->peer_data);
 			break;
 		case SSP_PARSE_BUFFERED:
-		{
-			ssp_io_process_window(io, params->peer_data);
-			ret = SSP_BUFFERED;
+			ret = ssp_io_process_window(io, params->peer_data);
 			break;
-		}
 		case SSP_PARSE_FAILED:
 		{
 			ret = SSP_FAILED;
