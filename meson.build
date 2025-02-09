@@ -9,4 +9,4 @@ project('ssp', 'c',
 subdir('ssp/lib/ght/ght/')
 subdir('ssp/lib/cutils')
 subdir('ssp/')
-#subdir('tests/')
+subdir('examples/')
