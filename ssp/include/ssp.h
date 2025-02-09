@@ -190,6 +190,14 @@ void ssp_io_ctx_init(ssp_io_ctx_t* ctx, u32 magic, void* user_data);
 void ssp_io_ctx_register_dispatch(ssp_io_ctx_t* ctx, u8 type, ssp_segment_callback_t callback);
 
 /**
+ *  Set the `verify_session` callback for `ssp_io_ctx_t`.
+ *  
+ *  This callback is used with `SSP_SESSION_BIT` to allow the receiving  
+ *  application to verify the sender. It is intended for use over UDP.
+ */
+void ssp_io_ctx_verify_callback(ssp_io_ctx_t* ctx, ssp_session_verify_callback_t callback);
+
+/**
  * Initialize an `ssp_io` instance.
  * This function initializes an `ssp_io` structure, associating it with 
  * a given SSP I/O context and setting the default transmission flags 

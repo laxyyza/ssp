@@ -33,6 +33,12 @@ ssp_io_ctx_register_dispatch(ssp_io_ctx_t* ctx, u8 type, ssp_segment_callback_t 
 	ctx->dispatch_table[type] = callback;
 }
 
+void 
+ssp_io_ctx_verify_callback(ssp_io_ctx_t* ctx, ssp_session_verify_callback_t callback)
+{
+	ctx->verify_session = callback;
+}
+
 static inline ssp_segment_callback_t 
 ssp_get_segment_callback(ssp_io_ctx_t* ctx, u8 type)
 {
