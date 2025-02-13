@@ -13,6 +13,8 @@ typedef struct
 	bool connected;
 
 	i32 file_fd;
+	u64 file_size;
+	u64 file_written;
 } client_t;
 
 typedef struct 

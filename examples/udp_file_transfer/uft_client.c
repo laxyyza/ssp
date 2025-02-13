@@ -40,7 +40,7 @@ client_send_upload(uft_client_t* client)
 	upload->path_len = path_len;
 	strncpy(upload->path, client->server_path, MAX_FILE_PATH);
 
-	client->file_size = upload->file_size = file_size(client->local_fd);
+	client->file_size = upload->file_size = file_size(client->local_fd, &upload->mode);
 	client->file_index = 0;
 
 	ssp_io_push_ref(&client->io, UFT_UPLOAD, size, upload);
@@ -174,7 +174,7 @@ client_init(uft_client_t* client, i32 argc, char* const* argv)
 	if (client_argv(client, argc, argv) == -1)
 		return -1;
 
-	if ((client->local_fd = file_exists(client->local_path, client->upload == false)) == -1)
+	if ((client->local_fd = file_exists(client->local_path, client->upload == false, 0)) == -1)
 		return -1;
 
     if ((client->sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)

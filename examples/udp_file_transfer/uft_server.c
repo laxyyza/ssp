@@ -1,5 +1,14 @@
 #include "uft_server.h"
+#include "ght.h"
 #include <sys/random.h>
+
+static void
+close_client(uft_server_t* server, client_t* client)
+{
+	if (client->file_fd > 0)
+		close(client->file_fd);
+	ght_del(&server->clients, client->session_id);
+}
 
 static client_t*
 new_client(uft_server_t* server, const uft_addr_t* addr)
@@ -76,9 +85,7 @@ uft_upload(const ssp_segment_t* segment, uft_server_t* server, client_t* client)
 {
 	const uft_upload_t* upload = (const void*)segment->data;
 
-	printf("path: %s\n", upload->path);
-
-	i32 fd = file_exists(upload->path, true);
+	i32 fd = file_exists(upload->path, true, upload->mode);
 	if (fd == -1)
 	{
 		uft_error_t* error = mmframes_zalloc(&server->mmf, sizeof(uft_error_t));
@@ -91,16 +98,23 @@ uft_upload(const ssp_segment_t* segment, uft_server_t* server, client_t* client)
 	{
 		ssp_io_push_ref(&client->io, UFT_OK, 0, NULL);
 		client->file_fd = fd;
+		client->file_size = upload->file_size;
 	}
 }
 
 static void 
-uft_file_data(const ssp_segment_t* segment, _SSP_UNUSED uft_server_t* server, client_t* client)
+uft_file_data(const ssp_segment_t* segment, uft_server_t* server, client_t* client)
 {
 	if (write(client->file_fd, segment->data, segment->size) == -1)
 	{
 		perror("write");
+		close_client(server, client);
+		return;
 	}
+
+	client->file_written += segment->size;
+	if (client->file_written >= client->file_size)
+		close_client(server, client);
 }
 
 static i32 

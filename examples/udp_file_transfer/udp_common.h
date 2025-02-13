@@ -53,6 +53,7 @@ typedef struct
 {
 	u64	 file_size;
 	u16  path_len;
+	mode_t mode;
 	char path[];
 } uft_upload_t;
 
@@ -67,8 +68,8 @@ typedef struct
 	char msg[ERROR_MSG_LEN];
 } uft_error_t;
 
-i32 file_exists(const char* path, bool create);
-u64 file_size(i32 fd);
+i32 file_exists(const char* path, bool create, mode_t mode);
+u64 file_size(i32 fd, mode_t* mode);
 
 #endif // _UDP_COMMON_H_
 
